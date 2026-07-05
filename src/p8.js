@@ -51,7 +51,10 @@ async function syncNow(verbose){
 function bindInput(){
 cv.addEventListener('pointerdown',ev=>{
   ensureAudio();
-  if($('panel').classList.contains('open')||$('dialog').classList.contains('open'))return;
+  if($('panel').classList.contains('open'))return; /* full-screen menu open: ignore world taps */
+  /* tapping the world while chatting closes the bottom sheet and abandons the
+     conversation (re-talking starts from scratch), then the tap still acts */
+  if($('dialog').classList.contains('open'))closeDialog();
   const rect=cv.getBoundingClientRect();
   const{camx,camy}=camera();
   const wx=(ev.clientX-rect.left)/SCALE+camx,wy=(ev.clientY-rect.top)/SCALE+camy;
@@ -77,7 +80,8 @@ cv.addEventListener('pointerdown',ev=>{
   if(r&&r.alive){setGather(r);clickMark={x:r.x,y:r.y,t0:T};return;}
   if(walkable(P.map,tx,ty)){
     P.action=null;
-    const path=findPath(P.map,P.tx,P.ty,tx,ty,false);
+    const sx=P.moving?P.moving.txx:P.tx, sy=P.moving?P.moving.tyy:P.ty;
+    const path=findPath(P.map,sx,sy,tx,ty,false);
     if(path){P.path=path;clickMark={x:tx,y:ty,t0:T};}
   }
 });

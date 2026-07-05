@@ -9,6 +9,13 @@ const TILE=32, INV_CAP=20, MAX_LVL=50, SAVE_VERSION=2;
 const $=id=>document.getElementById(id);
 const rand=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
 const clamp=(v,a,b)=>Math.max(a,Math.min(v,b));
+/* ambient RNG — a self-contained LCG for cosmetic randomness (NPC milling,
+   idle timing) kept OFF Math.random so it never perturbs the gameplay/loot
+   stream (which keeps combat-balance tests deterministic). */
+let _amb=0x9e3779b9>>>0;
+const _ambNext=()=>{_amb=(Math.imul(_amb,1664525)+1013904223)>>>0;return _amb/4294967296;};
+const ambRand=(a,b)=>a+Math.floor(_ambNext()*(b-a+1));
+const ambChance=p=>_ambNext()<p;
 let T=0; // game time in ms (advances only while playing)
 
 /* ---------------- skills ---------------- */

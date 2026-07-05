@@ -419,6 +419,8 @@ $('bInv').addEventListener('click',()=>{ensureAudio();openInventory();});
 $('bEquip').addEventListener('click',()=>{ensureAudio();openEquipment();});
 $('bSkills').addEventListener('click',()=>{ensureAudio();openSkills();});
 $('bQuests').addEventListener('click',()=>{ensureAudio();openQuests();});
+$('bMap').addEventListener('click',()=>{ensureAudio();toggleMinimap();});
+$('minimap').addEventListener('click',()=>{minimapOn=false;$('minimap').classList.remove('open');});
 $('bGear').addEventListener('click',()=>{ensureAudio();openSettings();});
 const sb=$('stylebtn');
 if(sb)sb.addEventListener('click',()=>{

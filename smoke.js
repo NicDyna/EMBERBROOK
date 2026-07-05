@@ -23,6 +23,10 @@ const dom=new JSDOM(html,{
     window.confirm=()=>true;
     window.fetch=()=>Promise.reject(new Error('offline test'));
     window.navigator.serviceWorker; // absent in jsdom — code must tolerate
+    /* seed Math.random so combat-balance assertions are reproducible run-to-run
+       (Node's Math.random is unseeded; thin-margin fights were otherwise flaky) */
+    let _s=0x2f6e2b1>>>0;
+    window.Math.random=()=>{_s=(Math.imul(_s,1664525)+1013904223)>>>0;return _s/4294967296;};
   }
 });
 const w=dom.window;
@@ -47,21 +51,21 @@ setTimeout(()=>{
     for(const e of EB.MAPS[mid].exits){
       const reach=[[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy])=>{
         const c=EB.world[mid].grid[e.y+dy]&&EB.world[mid].grid[e.y+dy][e.x+dx];
-        return c!==undefined&&!['X','R','W','F','#','Q','U','S','~','H'].includes(c);
+        return c!==undefined&&!['X','R','W','F','#','Q','U','S','~','H','B'].includes(c);
       });
       if(!reach){mapOk=false;console.log('  exit unreachable',mid,e.x,e.y);}
       // target walkable in destination
       const g=EB.world[e.map].grid[e.ty]&&EB.world[e.map].grid[e.ty][e.tx];
-      const tgtOk=g!==undefined&&!['X','R','W','F','#','Q','U','S','~','H'].includes(g)&&!EB.world[e.map].res.find(r=>r.x===e.tx&&r.y===e.ty);
+      const tgtOk=g!==undefined&&!['X','R','W','F','#','Q','U','S','~','H','B'].includes(g)&&!EB.world[e.map].res.find(r=>r.x===e.tx&&r.y===e.ty);
       if(!tgtOk){mapOk=false;console.log('  exit target blocked',mid,'->',e.map,e.tx,e.ty,'tile='+g);}
     }
     for(const m of EB.world[mid].mobs){
       const g=EB.world[mid].grid[m.hy][m.hx];
-      if(['X','R','W','F','#','Q','U','S','~','H'].includes(g)){mapOk=false;console.log('  mob spawn blocked',mid,m.type,m.hx,m.hy);}
+      if(['X','R','W','F','#','Q','U','S','~','H','B'].includes(g)){mapOk=false;console.log('  mob spawn blocked',mid,m.type,m.hx,m.hy);}
     }
     for(const n of EB.world[mid].npcs){
       const g=EB.world[mid].grid[n.y][n.x];
-      if(['X','R','W','F','#','Q','U','S','~','H'].includes(g)){mapOk=false;console.log('  npc blocked',mid,n.id);}
+      if(['X','R','W','F','#','Q','U','S','~','H','B'].includes(g)){mapOk=false;console.log('  npc blocked',mid,n.id);}
     }
   }
   ok(mapOk,'all 5 maps: exits reachable, targets + spawns walkable');
@@ -105,6 +109,11 @@ setTimeout(()=>{
   EB.addGear({id:'g_r_1_weapon',r:0});
   EB.equipGear(EB.P.inv.findIndex(s=>s.gear));
   ok(EB.P.gear.weapon.id==='g_r_1_weapon','bow equipped');
+  /* give the archer armour so the hold-position exchange isn't a razor-thin
+     HP-survival roll (this test is about range behaviour, not tanking on 10 HP) */
+  EB.addGear({id:'g_m_3_body',r:1});EB.equipGear(EB.P.inv.findIndex(s=>s.gear&&s.gear.id==='g_m_3_body'));
+  EB.addGear({id:'g_m_3_legs',r:1});EB.equipGear(EB.P.inv.findIndex(s=>s.gear&&s.gear.id==='g_m_3_legs'));
+  EB.P.hp=EB.maxHp();
   const gob2=EB.world.forest.mobs.find(m=>m.hx===8&&m.hy===4); // far from wolves
   gob2.alive=true;gob2.hp=99;gob2.tx=gob2.hx;gob2.ty=gob2.hy;gob2.px=gob2.tx*32;gob2.py=gob2.ty*32;gob2.aggro=false;gob2.moving=null;
   EB.world.forest.mobs.forEach(m=>{m.aggro=false;m.wanderT=1e12;}); // freeze wander for determinism

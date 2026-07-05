@@ -4,7 +4,7 @@
 
 function freshPlayer(){return{
   v:SAVE_VERSION,
-  map:'town',tx:11,ty:10,px:11*TILE,py:10*TILE,facing:1,
+  map:'town',tx:20,ty:17,px:20*TILE,py:17*TILE,facing:1,
   hp:10,
   xp:{attack:0,strength:0,defence:0,ranged:0,magic:0,woodcutting:0,mining:0},
   style:'accurate', // melee training style: accurate|aggressive|defensive

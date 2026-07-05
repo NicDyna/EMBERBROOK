@@ -93,14 +93,17 @@ function setFight(m){
 }
 function setTalk(n){
   P.action={kind:'talk',target:n.id};
-  routeToTarget(n.x,n.y,true);
+  routeToTarget(n.tx,n.ty,true);
 }
 function setLoot(d){
   P.action={kind:'loot',x:d.x,y:d.y};
   routeToTarget(d.x,d.y,false); /* walk onto the drop tile */
 }
 function routeToTarget(x,y,adj){
-  const path=findPath(P.map,P.tx,P.ty,x,y,adj);
+  /* start from the tile we're stepping toward (when mid-step) so a re-issued
+     route flows on from there instead of snapping back to the departed tile */
+  const sx=P.moving?P.moving.txx:P.tx, sy=P.moving?P.moving.tyy:P.ty;
+  const path=findPath(P.map,sx,sy,x,y,adj);
   if(path)P.path=path;else P.path=[];
 }
 function nearestRes(type,fx,fy){
@@ -337,7 +340,7 @@ function die(){
   }else toast('☠️ You were defeated!','bad');
   sfx('die');
   world[P.map].mobs.forEach(mm=>mm.aggro=false);
-  P.map='town';P.tx=11;P.ty=10;P.px=P.tx*TILE;P.py=P.ty*TILE;
+  P.map='town';P.tx=20;P.ty=17;P.px=P.tx*TILE;P.py=P.ty*TILE;
   P.path=[];P.moving=null;P.action=null;P.hp=maxHp();
   save();
 }
@@ -367,6 +370,7 @@ function updateMobs(){
           if(Math.random()<chance)dmg=Math.max(1,Math.round(rand(1,Math.max(1,Math.floor(1+d.pow*0.45)))*tri));
           if(d.style==='ranged')shoot(m.px+16,m.py+8,P.px+16,P.py+8,'#d8d5c8');
           if(d.style==='magic')shoot(m.px+16,m.py+8,P.px+16,P.py+8,'#b06fd1');
+          m.lungeT=T; /* renderer lunges the mob toward the player briefly */
           hurtPlayer(dmg);
         }
       }else{
@@ -387,6 +391,25 @@ function updateMobs(){
     }
   }
   for(const r of W.res)if(!r.alive&&T>=r.respawnAt)r.alive=true;
+}
+/* townsfolk gently mill about near their post (gives them a walk cycle) */
+function updateNpcs(){
+  const W=world[P.map];
+  for(const n of W.npcs){
+    stepEntity(n);
+    if(n.moving)continue;
+    if(T>=n.wanderT){
+      n.wanderT=T+ambRand(3500,8000);
+      if(ambChance(0.55))continue; /* often just idle in place */
+      const opts=[[1,0],[-1,0],[0,1],[0,-1]].filter(([dx,dy])=>{
+        const nx=n.tx+dx,ny=n.ty+dy;
+        return walkable(P.map,nx,ny)&&Math.abs(nx-n.hx)<=2&&Math.abs(ny-n.hy)<=2
+          &&!(nx===P.tx&&ny===P.ty)&&!mobAt(P.map,nx,ny)&&!npcAt(P.map,nx,ny)&&!exitAt(P.map,nx,ny);
+      });
+      if(opts.length){const[dx,dy]=opts[ambRand(0,opts.length-1)];
+        n.facing=dx<0?-1:dx>0?1:n.facing;n.path=[[n.tx+dx,n.ty+dy]];startStep(n,340);}
+    }
+  }
 }
 
 /* ---------------- main update ---------------- */
@@ -411,6 +434,7 @@ function update(dt){
     if(P.regenT>=3000){P.regenT=0;P.hp=Math.min(maxHp(),P.hp+1);}
   }
   updateMobs();
+  updateNpcs();
   /* ground drop lifecycle (graves tick only in-game, by design) */
   for(const map in world){
     const W=world[map];
