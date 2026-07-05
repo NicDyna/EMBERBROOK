@@ -46,7 +46,10 @@ const SAVE_KEY='emberbrook_v2';
 const OLD_KEY='emberbrook_v1';
 
 function serialize(){
-  const {moving,path,action,...clean}=P;
+  /* strip runtime-only fields: T-relative combat timers must NOT persist —
+     T resets to 0 each load, so a saved atkT/eatT would read as "in the
+     future" and freeze attacking/eating until the clock catches up. */
+  const {moving,path,action,atkT,eatT,lastHurt,regenT,retimer,...clean}=P;
   clean.ts=Date.now();
   /* persist ground drops per map so loot survives reload */
   clean.worldDrops={};
@@ -61,6 +64,9 @@ function save(){
 function applySave(d){
   const fp=freshPlayer();
   P={...fp,...d,moving:null,path:[],action:null};
+  /* zero the T-relative timers — T is 0 at load, so old saves that baked in a
+     high atkT/eatT would otherwise block attacking/eating on first load. */
+  P.atkT=0;P.eatT=0;P.lastHurt=0;P.regenT=0;P.retimer=0;
   P.xp={...fp.xp,...(d.xp||{})};
   P.gear={...fp.gear,...(d.gear||{})};
   P.stats={...fp.stats,...(d.stats||{})};

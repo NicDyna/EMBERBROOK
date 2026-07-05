@@ -235,6 +235,19 @@ setTimeout(()=>{
   ok(EB.world.forest.drops.some(d=>d.gold===42),'ground drops persisted through save/load');
   ok(EB.P.capes.includes('cape_woodcutting'),'capes persisted');
 
+  /* ---------- regression: stale T-timers in a save must not freeze combat ----
+     T resets to 0 each load; a persisted atkT/eatT would read as "in the future"
+     and block attacking. applySave must zero them. */
+  EB.applySave({map:'forest',tx:30,ty:20,px:960,py:640,atkT:999999,eatT:999999,lastHurt:999999,
+    xp:{attack:w.eval('xpAt(30)')},gear:{weapon:{id:'g_m_1_weapon',r:0}},stats:{}});
+  ok(EB.P.atkT===0&&EB.P.eatT===0&&EB.P.lastHurt===0,'load zeroes stale T-timers');
+  ok(!('atkT' in JSON.parse(JSON.stringify(EB.serialize()))),'serialize() omits transient combat timers');
+  const rsp=EB.world.forest.mobs.find(m=>m.type==='spider'&&m.alive);
+  if(rsp){rsp.tx=30;rsp.ty=19;rsp.px=960;rsp.py=608;rsp.moving=null;rsp.hp=99;rsp.alive=true;rsp.aggro=false;
+    EB.world.forest.drops.length=0;tp('forest',30,20);EB.P.hp=EB.maxHp();
+    const h0=rsp.hp;EB.setFight(rsp);tick(6000);
+    ok(rsp.hp<h0,'can attack immediately after loading a save (cooldown not frozen)');}
+
   console.log(fails? '\n'+fails+' FAILURES':'\nALL TESTS PASSED');
   process.exit(fails?1:0);
  }catch(e){console.log('CRASH:',e);process.exit(1);}
