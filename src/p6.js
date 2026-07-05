@@ -99,9 +99,12 @@ function draw(){
       const r=it.o,d=RES[r.type];
       if(d.skill==='woodcutting'){
         const sway=r.alive?Math.sin(T/900+r.x*1.3)*0.8:0; /* gentle wind */
-        ctx.drawImage(r.alive?(r.type==='O'?SPR.oak:SPR.tree):SPR.stump,r.x*TILE+sway,r.y*TILE-(r.alive?16:0));
-      }else
-        ctx.drawImage(r.alive?(r.type==='I'?SPR.rock_i:SPR.rock_c):SPR.rubble,r.x*TILE,r.y*TILE);
+        const tspr=r.type==='O'?SPR.oak:r.type==='Y'?SPR.pine:SPR.tree;
+        ctx.drawImage(r.alive?tspr:SPR.stump,r.x*TILE+sway,r.y*TILE-(r.alive?16:0));
+      }else{
+        const rspr=r.type==='I'?SPR.rock_i:r.type==='Z'?SPR.crystal:SPR.rock_c;
+        ctx.drawImage(r.alive?rspr:SPR.rubble,r.x*TILE,r.y*TILE);
+      }
     }else if(it.k==='m'){
       const m=it.o,d=MOBS[m.type];
       const facing=m.moving&&m.moving.txx<m.tx?-1:1;
@@ -119,7 +122,12 @@ function draw(){
         ctx.fillStyle='#f0c419';ctx.fillText(d.name,m.px+16,m.py-44);
       }else{
         drawFlipped(SPR[m.type],mx,my,facing);
-        if(m.hp<d.hp){
+        if(d.semi){ /* elite: name bar + wider health bar */
+          ctx.fillStyle='#000000aa';ctx.fillRect(m.px+2,m.py-8,28,4);
+          ctx.fillStyle='#c9584a';ctx.fillRect(m.px+3,m.py-7,26*(m.hp/d.hp),2);
+          ctx.font='bold 8px monospace';ctx.textAlign='center';
+          ctx.fillStyle='#d9a5f0';ctx.fillText(d.name,m.px+16,m.py-11);
+        }else if(m.hp<d.hp){
           ctx.fillStyle='#000000aa';ctx.fillRect(m.px+6,m.py-6,20,4);
           ctx.fillStyle='#c9584a';ctx.fillRect(m.px+7,m.py-5,18*(m.hp/d.hp),2);
         }
@@ -225,7 +233,8 @@ function updateHUD(){
 
 /* ---------------- minimap (toggle open, redrawn while visible) ---------- */
 let minimapOn=false;
-const MM_GROUND={'.':'#4a6741',',':'#5a4a3a',';':'#565c58',':':'#465239'};
+const MM_GROUND={'.':'#4a6741',',':'#5a4a3a',';':'#565c58',':':'#465239',
+  's':'#dbe4ee','a':'#a89a4e','d':'#d8c489'};
 function toggleMinimap(){
   minimapOn=!minimapOn;
   $('minimap').classList.toggle('open',minimapOn);
@@ -240,9 +249,9 @@ function drawMinimap(){
   const gnd=MM_GROUND[MAPS[P.map].ground]||'#4a6741';
   for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
     const ch=W.grid[y][x];
-    g.fillStyle = ch==='~'?'#31504f' : (ch==='P'||ch==='E')?'#8a8578'
-      : ch==='B'?'#6f5340' : (ch==='Q'||ch==='H'||ch==='G')?'#c9a24a'
-      : MM_GROUND[ch]||(RES[ch]?gnd:'#33302a');
+    g.fillStyle = ch==='~'?'#31504f' : (ch==='P'||ch==='E'||ch==='D')?'#8a8578'
+      : ch==='B'||ch==='K'?'#6f5340' : (ch==='Q'||ch==='H'||ch==='G')?'#c9a24a'
+      : ch==='k'?'#3f7a3a' : MM_GROUND[ch]||(RES[ch]?gnd:'#33302a');
     g.fillRect(x*cell,y*cell,cell,cell);
   }
   for(const r of W.res){if(!r.alive)continue;

@@ -156,21 +156,30 @@ const TOOLS={
   iron_pick:{name:'Iron Pickaxe',slot:'pick',tier:2,speed:.7,price:120,icon:['pick','#b8c4cf']},
   steel_pick:{name:'Steel Pickaxe',slot:'pick',tier:3,speed:.55,price:600,icon:['pick','#8f9aa5']},
 };
-/* p2: world data — resources, mobs (styles + loot tables), bosses,
-       NPCs, quests, dailies, the five maps, world builder, pathfinding */
+/* p2: world data — resources, biome mobs (styles + loot tables), dungeon
+       semi-bosses & bosses, NPCs, quests, dailies, the walled town + four
+       huge biome regions (Forest→Mountains→Plains→Desert) each with a
+       dungeon, procedural region builder, and pathfinding.
 
-/* ---------------- gatherable resources ---------------- */
+   World shape (single linear chain, town has ONE south gate):
+     Town → Forest → Mountains → Plains → Desert
+     each region holds a Dungeon (semi-boss + boss, the best loot). */
+
+/* ---------------- gatherable resources ----------------
+   Overworld gathering. Y/Z are the high-tier biome nodes (mountains/desert). */
 const RES={
   T:{name:'Tree',skill:'woodcutting',lvl:1,xp:12,item:'logs',time:2200,respawn:6000,hp:3},
   O:{name:'Oak',skill:'woodcutting',lvl:5,xp:26,item:'oak_logs',time:2800,respawn:9000,hp:4},
+  Y:{name:'Frostpine',skill:'woodcutting',lvl:15,xp:44,item:'oak_logs',time:3200,respawn:11000,hp:5},
   C:{name:'Copper Rock',skill:'mining',lvl:1,xp:14,item:'copper_ore',time:2400,respawn:7000,hp:3},
   I:{name:'Iron Rock',skill:'mining',lvl:8,xp:30,item:'iron_ore',time:3000,respawn:10000,hp:4},
+  Z:{name:'Crystal Vein',skill:'mining',lvl:18,xp:58,item:'gem',time:3600,respawn:15000,hp:5},
 };
 
 /* ---------------- loot table helpers ----------------
    entries: {w, gold:[min,max]} | {w, item, q:[min,max]}
           | {w, gear:{line?, tierMin, tierMax}}  (line omitted = random)
-   Boss tables get rarityBoost + a guaranteed roll. */
+   Boss/semi tables get rarityBoost + a second roll (see rollLoot in p5). */
 function lootRoll(table){
   const tot=table.reduce((a,e)=>a+e.w,0);
   let r=Math.random()*tot;
@@ -180,57 +189,101 @@ function lootRoll(table){
 
 /* ---------------- mobs ----------------
    style: 'melee'|'ranged'|'magic' (combat triangle:
-   melee beats ranged beats magic beats melee) */
+   melee beats ranged beats magic beats melee).
+   boss:true → big 2× sprite, ~5-min respawn. semi:true → elite (double loot
+   roll + rarity boost, faster respawn). Both live inside dungeons. */
 const MOBS={
-  goblin:{name:'Goblin',lvl:3,hp:12,style:'melee',acc:6,pow:4,def:3,spd:2600,range:1,
-    aggro:false,xp:22,gold:[3,9],
-    loot:[{w:50,gold:[3,9]},{w:18,item:'bone',q:[1,1]},{w:10,item:'bread',q:[1,1]},
-          {w:8,item:'arrows',q:[4,10]},{w:8,gear:{tierMin:1,tierMax:2}},{w:6,item:'cooked_meat',q:[1,1]}]},
-  wolf:{name:'Wolf',lvl:6,hp:20,style:'melee',acc:9,pow:6,def:5,spd:2200,range:1,
-    aggro:true,xp:34,gold:[0,0],
-    loot:[{w:46,item:'wolf_pelt',q:[1,1]},{w:22,item:'cooked_meat',q:[1,2]},
+  /* ===== Dense Forest — Whisperwood (lvl 3–12) ===== */
+  spider:{name:'Forest Spider',lvl:4,hp:14,style:'melee',acc:7,pow:4,def:3,spd:2400,range:1,
+    aggro:false,xp:24,gold:[2,7],
+    loot:[{w:48,gold:[2,7]},{w:20,item:'bone',q:[1,1]},{w:12,item:'bread',q:[1,1]},
+          {w:10,gear:{tierMin:1,tierMax:2}},{w:10,item:'cooked_meat',q:[1,1]}]},
+  boar:{name:'Wild Boar',lvl:6,hp:22,style:'melee',acc:9,pow:6,def:5,spd:2200,range:1,
+    aggro:true,xp:34,gold:[0,4],
+    loot:[{w:44,item:'wolf_pelt',q:[1,1]},{w:24,item:'cooked_meat',q:[1,2]},
           {w:20,item:'bone',q:[1,2]},{w:12,gear:{tierMin:1,tierMax:2}}]},
-  rat:{name:'Cave Rat',lvl:4,hp:16,style:'melee',acc:7,pow:5,def:4,spd:2400,range:1,
-    aggro:false,xp:26,gold:[2,6],
-    loot:[{w:52,gold:[2,6]},{w:22,item:'bone',q:[1,1]},{w:14,gear:{tierMin:1,tierMax:2}},
-          {w:12,item:'runes',q:[3,8]}]},
-  skeleton:{name:'Skeleton Archer',lvl:10,hp:26,style:'ranged',acc:12,pow:8,def:7,spd:2800,range:4,
-    aggro:true,xp:52,gold:[5,14],
-    loot:[{w:34,gold:[5,14]},{w:22,item:'arrows',q:[8,20]},{w:16,item:'bone',q:[1,3]},
-          {w:16,gear:{tierMin:2,tierMax:3}},{w:12,item:'iron_ore',q:[1,1]}]},
-  cultist:{name:'Cultist',lvl:16,hp:34,style:'magic',acc:16,pow:11,def:9,spd:2800,range:4,
-    aggro:true,xp:74,gold:[8,20],
-    loot:[{w:30,gold:[8,20]},{w:22,item:'runes',q:[6,16]},{w:18,item:'ancient_dust',q:[1,2]},
-          {w:18,gear:{tierMin:2,tierMax:4}},{w:12,item:'meat_pie',q:[1,1]}]},
-  gargoyle:{name:'Gargoyle',lvl:24,hp:52,style:'melee',acc:22,pow:15,def:16,spd:2600,range:1,
-    aggro:true,xp:120,gold:[12,30],
-    loot:[{w:30,gold:[12,30]},{w:22,item:'ancient_dust',q:[1,3]},{w:20,gear:{tierMin:3,tierMax:5}},
-          {w:16,item:'gem',q:[1,1]},{w:12,item:'iron_ore',q:[1,2]}]},
-  bogstalker:{name:'Bog Stalker',lvl:32,hp:66,style:'ranged',acc:28,pow:19,def:20,spd:2600,range:4,
-    aggro:true,xp:170,gold:[16,40],
-    loot:[{w:28,gold:[16,40]},{w:24,item:'swamp_herb',q:[1,3]},{w:20,gear:{tierMin:4,tierMax:5}},
-          {w:16,item:'arrows',q:[15,35]},{w:12,item:'stew',q:[1,1]}]},
-  hagspawn:{name:'Hag Spawn',lvl:38,hp:78,style:'magic',acc:34,pow:23,def:24,spd:2800,range:4,
-    aggro:true,xp:220,gold:[20,50],
-    loot:[{w:26,gold:[20,50]},{w:24,item:'runes',q:[12,28]},{w:20,gear:{tierMin:4,tierMax:6}},
-          {w:18,item:'swamp_herb',q:[2,4]},{w:12,item:'gem',q:[1,1]}]},
-  /* ------- zone bosses: big sprite, best loot, ~5 min respawn ------- */
-  goblin_king:{name:'Goblin King',lvl:12,hp:90,style:'melee',acc:16,pow:11,def:10,spd:2400,range:1,
-    aggro:true,xp:300,gold:[40,90],boss:true,respawn:300000,rarityBoost:2,
-    loot:[{w:40,gear:{tierMin:2,tierMax:3}},{w:30,gold:[40,90]},{w:18,item:'meat_pie',q:[1,2]},
+  bandit:{name:'Forest Bandit',lvl:9,hp:28,style:'ranged',acc:12,pow:7,def:6,spd:2800,range:4,
+    aggro:true,xp:46,gold:[6,16],
+    loot:[{w:34,gold:[6,16]},{w:22,item:'arrows',q:[6,14]},{w:16,item:'bread',q:[1,2]},
+          {w:16,gear:{tierMin:1,tierMax:2}},{w:12,item:'copper_ore',q:[1,1]}]},
+
+  /* ===== Frostpeak Mountains — snow (lvl 14–24) ===== */
+  frost_wolf:{name:'Frost Wolf',lvl:15,hp:40,style:'melee',acc:16,pow:11,def:10,spd:2100,range:1,
+    aggro:true,xp:72,gold:[4,12],
+    loot:[{w:40,item:'wolf_pelt',q:[1,2]},{w:24,item:'cooked_meat',q:[1,2]},
+          {w:18,item:'bone',q:[1,3]},{w:18,gear:{tierMin:2,tierMax:3}}]},
+  ice_sprite:{name:'Ice Sprite',lvl:18,hp:36,style:'magic',acc:19,pow:13,def:10,spd:2800,range:4,
+    aggro:true,xp:92,gold:[8,20],
+    loot:[{w:30,gold:[8,20]},{w:24,item:'runes',q:[6,16]},{w:18,item:'gem',q:[1,1]},
+          {w:18,gear:{tierMin:2,tierMax:4}},{w:10,item:'meat_pie',q:[1,1]}]},
+  snow_troll:{name:'Snow Troll',lvl:22,hp:68,style:'melee',acc:22,pow:15,def:18,spd:2800,range:1,
+    aggro:true,xp:130,gold:[10,26],
+    loot:[{w:30,gold:[10,26]},{w:22,item:'iron_ore',q:[1,2]},{w:20,gear:{tierMin:3,tierMax:4}},
+          {w:16,item:'bone',q:[2,4]},{w:12,item:'gem',q:[1,1]}]},
+
+  /* ===== Golden Plains — savanna (lvl 26–36) ===== */
+  steppe_lion:{name:'Steppe Lion',lvl:26,hp:74,style:'melee',acc:25,pow:16,def:16,spd:2200,range:1,
+    aggro:true,xp:150,gold:[12,30],
+    loot:[{w:34,item:'wolf_pelt',q:[1,3]},{w:24,item:'cooked_meat',q:[2,3]},
+          {w:20,gear:{tierMin:3,tierMax:4}},{w:12,item:'gem',q:[1,1]},{w:10,item:'meat_pie',q:[1,1]}]},
+  war_hawk:{name:'War Hawk',lvl:30,hp:58,style:'ranged',acc:28,pow:18,def:15,spd:2600,range:4,
+    aggro:true,xp:176,gold:[14,34],
+    loot:[{w:30,gold:[14,34]},{w:26,item:'arrows',q:[12,28]},{w:20,gear:{tierMin:3,tierMax:5}},
+          {w:14,item:'gem',q:[1,1]},{w:10,item:'stew',q:[1,1]}]},
+  nomad:{name:'Steppe Nomad',lvl:34,hp:82,style:'magic',acc:34,pow:22,def:22,spd:2800,range:4,
+    aggro:true,xp:212,gold:[18,44],
+    loot:[{w:28,gold:[18,44]},{w:24,item:'runes',q:[12,26]},{w:20,gear:{tierMin:4,tierMax:5}},
+          {w:16,item:'ancient_dust',q:[1,2]},{w:12,item:'gem',q:[1,2]}]},
+
+  /* ===== Ashen Desert — dunes (lvl 38–49) ===== */
+  scorpion:{name:'Sand Scorpion',lvl:38,hp:92,style:'melee',acc:36,pow:23,def:24,spd:2400,range:1,
+    aggro:true,xp:212,gold:[16,40],
+    loot:[{w:30,gold:[16,40]},{w:24,item:'gem',q:[1,2]},{w:20,gear:{tierMin:4,tierMax:5}},
+          {w:14,item:'bone',q:[2,4]},{w:12,item:'stew',q:[1,1]}]},
+  sand_wraith:{name:'Sand Wraith',lvl:42,hp:86,style:'magic',acc:40,pow:26,def:24,spd:2800,range:4,
+    aggro:true,xp:250,gold:[20,50],
+    loot:[{w:28,gold:[20,50]},{w:24,item:'runes',q:[14,30]},{w:20,item:'ancient_dust',q:[1,3]},
+          {w:18,gear:{tierMin:4,tierMax:6}},{w:10,item:'gem',q:[1,2]}]},
+  dune_raider:{name:'Dune Raider',lvl:45,hp:98,style:'ranged',acc:44,pow:28,def:26,spd:2600,range:4,
+    aggro:true,xp:280,gold:[24,56],
+    loot:[{w:28,gold:[24,56]},{w:24,item:'arrows',q:[18,40]},{w:20,gear:{tierMin:5,tierMax:6}},
+          {w:16,item:'gem',q:[1,2]},{w:12,item:'stew',q:[1,2]}]},
+
+  /* ===== Dungeon semi-bosses (elite: double loot + rarity boost) ===== */
+  spider_matron:{name:'Spider Matron',lvl:14,hp:70,style:'melee',acc:16,pow:11,def:10,spd:2500,range:1,
+    aggro:true,xp:150,gold:[15,35],semi:true,respawn:120000,rarityBoost:1,
+    loot:[{w:40,gear:{tierMin:2,tierMax:3}},{w:26,gold:[15,35]},{w:18,item:'gem',q:[1,1]},
+          {w:16,item:'meat_pie',q:[1,2]}]},
+  ice_warden:{name:'Ice Warden',lvl:28,hp:150,style:'magic',acc:30,pow:20,def:22,spd:2600,range:5,
+    aggro:true,xp:560,gold:[70,150],semi:true,respawn:120000,rarityBoost:2,
+    loot:[{w:42,gear:{tierMin:3,tierMax:4}},{w:26,gold:[70,150]},{w:18,item:'gem',q:[1,2]},
+          {w:14,item:'runes',q:[16,32]}]},
+  barrow_wight:{name:'Barrow Wight',lvl:38,hp:180,style:'magic',acc:36,pow:24,def:26,spd:2600,range:5,
+    aggro:true,xp:720,gold:[100,220],semi:true,respawn:120000,rarityBoost:2,
+    loot:[{w:42,gear:{tierMin:4,tierMax:5}},{w:24,gold:[100,220]},{w:18,item:'ancient_dust',q:[2,4]},
+          {w:16,item:'gem',q:[1,2]}]},
+  tomb_guardian:{name:'Tomb Guardian',lvl:46,hp:220,style:'melee',acc:46,pow:30,def:34,spd:2600,range:1,
+    aggro:true,xp:1000,gold:[160,340],semi:true,respawn:120000,rarityBoost:3,
+    loot:[{w:44,gear:{tierMin:5,tierMax:6}},{w:24,gold:[160,340]},{w:18,item:'gem',q:[2,3]},
+          {w:14,item:'ancient_dust',q:[3,5]}]},
+
+  /* ===== Dungeon bosses (big 2× sprite, ~5-min respawn, best loot) ===== */
+  bandit_king:{name:'The Bandit King',lvl:16,hp:120,style:'melee',acc:18,pow:12,def:12,spd:2400,range:1,
+    aggro:true,xp:360,gold:[50,110],boss:true,respawn:300000,rarityBoost:2,
+    loot:[{w:42,gear:{tierMin:2,tierMax:3}},{w:28,gold:[50,110]},{w:18,item:'meat_pie',q:[1,2]},
           {w:12,item:'gem',q:[1,1]}]},
-  rock_horror:{name:'Rock Horror',lvl:22,hp:150,style:'melee',acc:24,pow:16,def:20,spd:2800,range:1,
-    aggro:true,xp:520,gold:[70,150],boss:true,respawn:300000,rarityBoost:2,
-    loot:[{w:40,gear:{tierMin:3,tierMax:4}},{w:28,gold:[70,150]},{w:18,item:'gem',q:[1,2]},
+  frost_giant:{name:'The Frost Giant',lvl:32,hp:260,style:'melee',acc:26,pow:18,def:24,spd:2800,range:1,
+    aggro:true,xp:640,gold:[90,200],boss:true,respawn:300000,rarityBoost:2,
+    loot:[{w:42,gear:{tierMin:3,tierMax:5}},{w:26,gold:[90,200]},{w:18,item:'gem',q:[1,2]},
           {w:14,item:'iron_ore',q:[2,4]}]},
-  lich:{name:'Lich Ardun',lvl:36,hp:230,style:'magic',acc:38,pow:26,def:26,spd:2600,range:5,
-    aggro:true,xp:900,gold:[120,260],boss:true,respawn:300000,rarityBoost:3,
-    loot:[{w:42,gear:{tierMin:4,tierMax:6}},{w:26,gold:[120,260]},{w:18,item:'ancient_dust',q:[3,6]},
-          {w:14,item:'runes',q:[20,40]}]},
-  swamp_hag:{name:'The Swamp Hag',lvl:46,hp:320,style:'magic',acc:48,pow:32,def:34,spd:2600,range:5,
-    aggro:true,xp:1400,gold:[200,420],boss:true,respawn:300000,rarityBoost:3,
-    loot:[{w:44,gear:{tierMin:5,tierMax:6}},{w:24,gold:[200,420]},{w:18,item:'gem',q:[1,3]},
-          {w:14,item:'swamp_herb',q:[3,6]}]},
+  plains_warlord:{name:'The Plains Warlord',lvl:42,hp:300,style:'melee',acc:40,pow:26,def:30,spd:2400,range:1,
+    aggro:true,xp:900,gold:[140,300],boss:true,respawn:300000,rarityBoost:3,
+    loot:[{w:44,gear:{tierMin:4,tierMax:6}},{w:24,gold:[140,300]},{w:18,item:'gem',q:[2,3]},
+          {w:14,item:'ancient_dust',q:[2,4]}]},
+  sand_pharaoh:{name:'The Sand Pharaoh',lvl:50,hp:360,style:'magic',acc:50,pow:34,def:36,spd:2600,range:5,
+    aggro:true,xp:1600,gold:[240,480],boss:true,respawn:300000,rarityBoost:3,
+    loot:[{w:46,gear:{tierMin:5,tierMax:6}},{w:22,gold:[240,480]},{w:18,item:'gem',q:[2,4]},
+          {w:14,item:'ancient_dust',q:[4,7]}]},
 };
 
 /* ---------------- NPCs & dialogue ---------------- */
@@ -239,56 +292,54 @@ const NPCS={
   smith:{name:'Smith Torvald',role:'shop'},
   elder:{name:'Elder Rowan',role:'quests'},
   guard:{name:'Guard Bram',role:'chat',lines:["Stay on the roads, traveller.",
-    "The ruins north of the forest... nothing good comes from there.",
-    "They say the swamp hag hoards treasures beyond counting."]},
+    "The only way out is the south gate — mind what waits beyond.",
+    "Whisperwood, then the frozen peaks, the plains, and the deep desert. Few return.",
+    "The real treasures lie in the dungeons. So do the things that guard them."]},
   skillmaster:{name:'Master Aldric',role:'capes'},
 };
 
-/* ---------------- quests ---------------- */
+/* ---------------- quests (7, linear) ---------------- */
 const QUESTS={
   fresh:{name:'Fresh Timber',giver:'elder',desc:'Chop 3 logs for the town stockpile.',
     kind:'gather',item:['logs'],need:3,reward:{gold:30,xp:{woodcutting:40}}},
   ore:{name:'Copper for the Forge',giver:'smith',desc:'Mine 3 copper ore for Torvald.',
     kind:'gather',item:['copper_ore'],need:3,reward:{gold:35,xp:{mining:45}}},
-  goblins:{name:'Goblin Trouble',giver:'guard',desc:'Slay 4 goblins in Whisper Forest.',
-    kind:'kill',mob:['goblin'],need:4,reward:{gold:60,xp:{attack:40,strength:40}}},
-  iron:{name:'Iron Will',giver:'smith',desc:'Bring 2 iron ore from the deep mines.',
-    kind:'gather',item:['iron_ore'],need:2,reward:{gold:90,xp:{mining:90},gear:{id:'g_m_2_weapon',r:1}}},
-  bones:{name:'Restless Dead',giver:'elder',desc:'Destroy 3 skeletons in the mines.',
-    kind:'kill',mob:['skeleton'],need:3,reward:{gold:120,xp:{defence:80},gear:{id:'g_m_2_body',r:1}}},
-  lichbane:{name:'The Lich of the Ruins',giver:'elder',desc:'Defeat Lich Ardun in the Sunken Ruins.',
-    kind:'kill',mob:['lich'],need:1,reward:{gold:600,xp:{magic:300,defence:200}}},
-  hagsend:{name:"The Hag's End",giver:'elder',desc:'Slay the Swamp Hag and free the marsh.',
-    kind:'kill',mob:['swamp_hag'],need:1,reward:{gold:1500,xp:{attack:300,strength:300,ranged:300}}},
+  spiders:{name:'Along Came Spiders',giver:'guard',desc:'Slay 4 forest spiders in Whisperwood.',
+    kind:'kill',mob:['spider'],need:4,reward:{gold:60,xp:{attack:40,strength:40}}},
+  warren:{name:'The Bandit King',giver:'elder',desc:'Enter the Hollow Warren and defeat the Bandit King.',
+    kind:'kill',mob:['bandit_king'],need:1,reward:{gold:200,xp:{attack:120,defence:100},gear:{id:'g_m_3_body',r:1}}},
+  frost:{name:'Thaw the Deep',giver:'elder',desc:'Defeat the Frost Giant in the Glacial Cavern.',
+    kind:'kill',mob:['frost_giant'],need:1,reward:{gold:500,xp:{strength:260,defence:200}}},
+  barrow:{name:'Warlord of the Plains',giver:'elder',desc:'Defeat the Plains Warlord in the Sunken Barrow.',
+    kind:'kill',mob:['plains_warlord'],need:1,reward:{gold:900,xp:{ranged:300,magic:300}}},
+  pharaoh:{name:'The Sand Pharaoh',giver:'elder',desc:'Descend the Pharaoh\'s Tomb and end the Sand Pharaoh.',
+    kind:'kill',mob:['sand_pharaoh'],need:1,reward:{gold:2000,xp:{attack:350,strength:350,magic:350}}},
 };
-const QUEST_ORDER=['fresh','ore','goblins','iron','bones','lichbane','hagsend'];
+const QUEST_ORDER=['fresh','ore','spiders','warren','frost','barrow','pharaoh'];
 
 /* ---------------- daily task pool ---------------- */
 const DAILY_POOL=[
   {id:'d_logs',desc:'Chop 10 logs',kind:'gather',item:['logs','oak_logs'],need:10,gold:40},
   {id:'d_ore',desc:'Mine 8 ore',kind:'gather',item:['copper_ore','iron_ore'],need:8,gold:45},
   {id:'d_kill',desc:'Defeat 6 monsters',kind:'kill',mob:null,need:6,gold:50},
-  {id:'d_gob',desc:'Slay 4 goblins',kind:'kill',mob:['goblin'],need:4,gold:40},
+  {id:'d_spider',desc:'Slay 4 forest spiders',kind:'kill',mob:['spider'],need:4,gold:40},
   {id:'d_gold',desc:'Earn 150 gold',kind:'gold',need:150,gold:60},
-  {id:'d_skel',desc:'Destroy 3 skeletons',kind:'kill',mob:['skeleton'],need:3,gold:55},
+  {id:'d_frost',desc:'Destroy 3 frost wolves',kind:'kill',mob:['frost_wolf'],need:3,gold:60},
   {id:'d_ranged',desc:'Land 15 ranged or magic kills or hits',kind:'stylehit',need:15,gold:55},
-  {id:'d_boss',desc:'Defeat any zone boss',kind:'kill',mob:['goblin_king','rock_horror','lich','swamp_hag'],need:1,gold:120},
-  {id:'d_ruins',desc:'Defeat 5 monsters in the ruins',kind:'killmap',map:'ruins',need:5,gold:70},
-  {id:'d_swamp',desc:'Defeat 5 monsters in the swamp',kind:'killmap',map:'swamp',need:5,gold:90},
+  {id:'d_boss',desc:'Defeat any dungeon boss',kind:'kill',mob:['bandit_king','frost_giant','plains_warlord','sand_pharaoh'],need:1,gold:140},
+  {id:'d_mountains',desc:'Defeat 5 monsters in the mountains',kind:'killmap',map:'mountains',need:5,gold:75},
+  {id:'d_desert',desc:'Defeat 5 monsters in the desert',kind:'killmap',map:'desert',need:5,gold:110},
 ];
 
 /* ---------------- maps ----------------
-   Tiles: . grass  , cave floor  ; ruin floor  : swamp floor
-   X rock wall  # cave wall  F forest edge  U ruin wall  S swamp edge
-   R roof  W bank  P path  E exit marker  Q quest board  M monument
-   G gravestone-decor  A skillmaster porch  T/O/C/I resources  ~ water */
+   Tiles: . grass  s snow  a savanna  d desert sand  , dungeon floor  ~ water
+   K town wall  X rock/cliff  F forest edge  # dungeon wall  k cactus (blocked)
+   P path/road  E exit gate  D dungeon entrance  Q quest board  H monument
+   B building footprint  G grave decor  T/O/Y trees  C/I/Z ore/crystal
+   Town is generated by buildTownGrid; the four regions + four dungeons by
+   buildRegions — both run once at load so buildWorld sees finished grids. */
 const MAPS={
- /* Emberbrook — modelled on the old town of St. Vith: an egg-shaped ring wall
-    (wide + rounded to the north, tapering to a point at the south where the
-    Büchelturm stands), the Hauptstraße spine running N→S, and St-Vitus church
-    east of it. Grid + streets + gates are generated by buildTownGrid below;
-    'B' = building footprint (blocked, drawn as an oblique billboard in p6). */
- town:{name:'Emberbrook',ground:'.',w:40,h:36,spawn:[20,17],rows:[],
+ town:{name:'Emberbrook',ground:'.',w:40,h:36,spawn:[20,17],rows:[],gate:[20,33],
   buildings:[
    {x:9, y:4, w:3,d:3,type:'house_a'},
    {x:14,y:4, w:4,d:3,type:'house_c',label:'BÄCKEREI'},
@@ -303,136 +354,50 @@ const MAPS={
    {x:13,y:23,w:4,d:3,type:'house_b'},
    {x:24,y:23,w:4,d:3,type:'inn',   label:'HOTEL'},
    {x:30,y:23,w:3,d:3,type:'house_a'},
-   {x:19,y:29,w:3,d:3,type:'tower', label:'BÜCHELTURM'}],
+   {x:24,y:26,w:3,d:3,type:'tower', label:'BÜCHELTURM'}],
   npcs:[{id:'banker',x:9,y:12},{id:'smith',x:30,y:19},{id:'elder',x:14,y:20},
         {id:'skillmaster',x:25,y:14},{id:'guard',x:22,y:26}],
   mobs:[],exits:[],labels:[]},
- forest:{name:'Whisper Forest',ground:'.',rows:[
-  "FFFFFFFFFFFFFFFFFFFFFFFFFF",
-  "F..T....T.....T......TFEEF",
-  "F....................T...F",
-  "F..T.....T....FF....T....F",
-  "F.............FF.......O.F",
-  "F...T....T...............F",
-  "F........................F",
-  "F......T.............O...F",
-  "EPPPP....................F",
-  "EPPPP....................F",
-  "F........T...............F",
-  "F.............FF.......O.F",
-  "F...T....................F",
-  "F..........T.........O...F",
-  "F........................F",
-  "F....T.........T.........F",
-  "F........................F",
-  "FFFFFFFFFFFFFFFFFFFFFFFFFF"],
-  npcs:[],
-  mobs:[{t:'goblin',x:8,y:4},{t:'goblin',x:12,y:7},{t:'goblin',x:9,y:12},{t:'goblin',x:14,y:10},
-        {t:'goblin',x:16,y:5},{t:'wolf',x:20,y:11},{t:'wolf',x:22,y:13},{t:'wolf',x:19,y:3},
-        {t:'goblin_king',x:6,y:15}],
-  exits:[{x:0,y:8,map:'town',tx:34,ty:14},{x:0,y:9,map:'town',tx:34,ty:15},
-         {x:23,y:1,map:'ruins',tx:2,ty:15},{x:24,y:1,map:'ruins',tx:3,ty:15}],labels:[]},
- mines:{name:'Old Copper Mines',ground:',',rows:[
-  "###########MM###########",
-  "#,,,,,,,,,,,,,,,,,,,,,,#",
-  "#,,C,,,,,,,,,,,,,C,,,,,#",
-  "#,,,,,,,,#####,,,,,,,,,#",
-  "#,C,,,,,,#,,,,,,,,C,,,,#",
-  "#,,,,,,,,#,,,,,,,,,,,,,#",
-  "#,,,,C,,,#,,,,,,C,,,,,,#",
-  "#,,,,,,,,,,,,,,,,,,,,,,#",
-  "#,,,,####,,,,,,####,,,,#",
-  "#,,,,,,,,,,,,,,,,,,,,,,#",
-  "#,I,,,,,,,,,,,,,,,,,I,,#",
-  "#,,,,,,,,,,I,,,,,,,,,,,#",
-  "#,,,,,,,,,,,,,,,,,,,,,,#",
-  "#,,,I,,,,,,,,,,,,,I,,,,#",
-  "#,,,,,,,,,,,,,,,,,,,,,,E",
-  "#######################E"],
-  npcs:[],
-  mobs:[{t:'rat',x:6,y:3},{t:'rat',x:15,y:5},{t:'rat',x:3,y:7},
-        {t:'skeleton',x:8,y:11},{t:'skeleton',x:15,y:12},{t:'skeleton',x:20,y:13},
-        {t:'rock_horror',x:2,y:12}],
-  exits:[{x:11,y:0,map:'town',tx:19,ty:26},{x:12,y:0,map:'town',tx:20,ty:26},
-         {x:23,y:14,map:'swamp',tx:1,ty:2},{x:23,y:15,map:'swamp',tx:1,ty:2}],labels:[]},
- ruins:{name:'Sunken Ruins',ground:';',rows:[
-  "UUUUUUUUUUUUUUUUUUUUUUUU",
-  "U;;;;;;;U;;;;;;;;U;;;;;U",
-  "U;;G;;;;;;;;~~;;;;;;G;;U",
-  "U;;;;;;U;;;;~~;;;U;;;;;U",
-  "U;;;;;;U;;;;;;;;;U;;;;;U",
-  "U;G;;;;;;;;;;;;;;;;;;G;U",
-  "U;;;;;;;;;UUUU;;;;;;;;;U",
-  "U;;;;;;;;;U;;;;;;;;;;;;U",
-  "U;;~~;;;;;U;;;;;;;~~;;;U",
-  "U;;~~;;;;;;;;;;;;;~~;;;U",
-  "U;;;;;;;;;;;;;;;;;;;;;;U",
-  "U;G;;;;;;;;;;;;;;;;;G;;U",
-  "U;;;;;;;;UU;;UU;;;;;;;;U",
-  "U;;;;;;;;U;;;;U;;;;;;;;U",
-  "U;;;;;;;;;;;;;;;;;;;;;;U",
-  "U;EE;;;;;;;;;;;;;;;;;;;U",
-  "UUUUUUUUUUUUUUUUUUUUUUUU"],
-  npcs:[],
-  mobs:[{t:'cultist',x:6,y:4},{t:'cultist',x:16,y:3},{t:'cultist',x:4,y:10},{t:'cultist',x:20,y:10},
-        {t:'gargoyle',x:12,y:8},{t:'gargoyle',x:18,y:13},{t:'gargoyle',x:6,y:14},
-        {t:'lich',x:12,y:13}],
-  exits:[{x:2,y:15,map:'forest',tx:23,ty:2},{x:3,y:15,map:'forest',tx:24,ty:2}],labels:[]},
- swamp:{name:'Mirefen Swamp',ground:':',rows:[
-  "SSSSSSSSSSSSSSSSSSSSSSSS",
-  "S::::::~~::::::::::::::S",
-  "E::::::~~::::::~~~:::::S",
-  "E:::::::::::::::~~:::::S",
-  "S:::T::::::::::::::::T:S",
-  "S::::::::~~~:::::::::::S",
-  "S:::::::~~~~:::::::::::S",
-  "S::::::::~~::::::::::::S",
-  "S:T::::::::::::::~~::::S",
-  "S::::::::::::::::~~::::S",
-  "S:::::~~:::::::::::::::S",
-  "S:::::~~::::T::::::::::S",
-  "S::::::::::::::::::::::S",
-  "S:::::::::~~~::::::::::S",
-  "S:T::::::::~~::::::::::S",
-  "S::::::::::::::::::::::S",
-  "SSSSSSSSSSSSSSSSSSSSSSSS"],
-  npcs:[],
-  mobs:[{t:'bogstalker',x:6,y:3},{t:'bogstalker',x:14,y:6},{t:'bogstalker',x:5,y:12},
-        {t:'hagspawn',x:18,y:4},{t:'hagspawn',x:12,y:10},{t:'hagspawn',x:19,y:13},
-        {t:'swamp_hag',x:20,y:8}],
-  exits:[{x:0,y:2,map:'mines',tx:22,ty:14},{x:0,y:3,map:'mines',tx:22,ty:14}],labels:[]},
+ forest:{name:'Whisperwood',ground:'.',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
+ mountains:{name:'Frostpeak Mountains',ground:'s',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
+ plains:{name:'Golden Plains',ground:'a',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
+ desert:{name:'Ashen Desert',ground:'d',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
+ forest_dungeon:{name:'Hollow Warren',ground:',',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
+ mountains_dungeon:{name:'Glacial Cavern',ground:',',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
+ plains_dungeon:{name:'Sunken Barrow',ground:',',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
+ desert_dungeon:{name:"Pharaoh's Tomb",ground:',',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
 };
-const BLOCKED=new Set(['X','R','W','F','#','Q','U','S','~','H','B']);
+const BLOCKED=new Set(['X','R','W','F','#','Q','U','S','~','H','B','K','k']);
 
-/* ---- generate the St. Vith town grid: egg-shaped ring wall + streets ----
-   Interior is walkable grass; the ring + Hauptstraße + cross-lanes are 'P';
-   building footprints are 'B'. Gates are punched where the ring meets the
-   forest (east) and mines (south-west), and the matching return targets in
-   forest/mines are wired up here. Runs once at load so buildWorld sees it. */
+/* ---- generate the St. Vith town grid: egg-shaped stone wall + one south gate
+   Interior is walkable grass/road; the egg ring is now a solid WALL 'K'
+   (blocking). The Hauptstraße spine runs down to a single southern gate 'E'
+   that leads to Whisperwood; all other gates are gone. 'B' = building. ---- */
 (function buildTownGrid(){
   const t=MAPS.town,W=t.w,H=t.h;
   const g=Array.from({length:H},()=>new Array(W).fill('.'));
   const set=(x,y,c)=>{if(x>=0&&x<W&&y>=0&&y<H)g[y][x]=c;};
-  const road=(x,y)=>{if(x>=0&&x<W&&y>=0&&y<H&&g[y][x]==='.')g[y][x]='P';};
+  const wall=(x,y)=>{if(x>=0&&x<W&&y>=0&&y<H&&g[y][x]==='.')g[y][x]='K';};
+  const road=(x,y)=>{if(x>=0&&x<W&&y>=0&&y<H&&(g[y][x]==='.'))g[y][x]='P';};
   const vl=(x,y0,y1)=>{for(let y=y0;y<=y1;y++)road(x,y);};
   const hl=(x0,x1,y)=>{for(let x=x0;x<=x1;x++)road(x,y);};
   const rect=(x,y,w,d,c)=>{for(let j=0;j<d;j++)for(let i=0;i<w;i++)set(x+i,y+j,c);};
-  /* egg-shaped ring wall: wide rounded north, tapering to a southern point */
+  /* egg-shaped stone wall: wide rounded north, tapering to a southern point */
   const cx=20,cyc=16,ryc=17,rx=16,yTop=2,yBot=33,L=[],Rr=[];
   for(let y=yTop;y<=yBot;y++){
     const tt=(y-cyc)/ryc,base=Math.sqrt(Math.max(0,1-tt*tt)),taper=tt>0?1-0.5*tt:1;
     const hw=rx*base*taper;L[y]=Math.round(cx-hw);Rr[y]=Math.round(cx+hw);
   }
   for(let y=yTop;y<=yBot;y++){
-    road(L[y],y);road(Rr[y],y);
+    wall(L[y],y);wall(Rr[y],y);
     if(y>yTop){ /* staircase-fill so the wall stays one closed loop */
-      for(let x=Math.min(L[y],L[y-1]);x<=Math.max(L[y],L[y-1]);x++)road(x,y);
-      for(let x=Math.min(Rr[y],Rr[y-1]);x<=Math.max(Rr[y],Rr[y-1]);x++)road(x,y);
+      for(let x=Math.min(L[y],L[y-1]);x<=Math.max(L[y],L[y-1]);x++)wall(x,y);
+      for(let x=Math.min(Rr[y],Rr[y-1]);x<=Math.max(Rr[y],Rr[y-1]);x++)wall(x,y);
     }
   }
-  for(let x=L[yTop];x<=Rr[yTop];x++)road(x,yTop); /* rounded northern cap */
-  /* Hauptstraße spine + named cross-lanes + Orts-/Kirchstraße side lanes */
-  vl(19,6,28);vl(20,6,28);
+  for(let x=L[yTop];x<=Rr[yTop];x++)wall(x,yTop); /* rounded northern cap */
+  /* Hauptstraße spine (down to the gate) + named cross-lanes + side lanes */
+  vl(19,6,31);vl(20,6,32);
   const cross=y=>hl(L[y]+1,Rr[y]-1,y);cross(8);cross(15);cross(22);
   vl(12,9,24);vl(28,9,22);
   /* buildings, then square furniture, churchyard graves, the Teich pond, greens */
@@ -441,20 +406,109 @@ const BLOCKED=new Set(['X','R','W','F','#','Q','U','S','~','H','B']);
   rect(32,13,2,2,'~');
   set(15,26,'T');set(17,27,'O');set(26,26,'T');
   for(const[x,y]of[[2,9],[3,22],[36,10],[37,25],[6,34],[34,34],[2,28],[10,33]])set(x,y,'T');
-  /* gates: east → forest, south-west → mines (the ring tile is the arrival) */
-  const gE1=Rr[13],gE2=Rr[14],gW1=L[24],gW2=L[25];
-  set(gE1+1,13,'E');set(gE2+1,14,'E');set(gW1-1,24,'E');set(gW2-1,25,'E');
-  t.exits=[{x:gE1+1,y:13,map:'forest',tx:1,ty:8},{x:gE2+1,y:14,map:'forest',tx:1,ty:9},
-           {x:gW1-1,y:24,map:'mines',tx:11,ty:1},{x:gW2-1,y:25,map:'mines',tx:12,ty:1}];
-  MAPS.forest.exits[0].tx=gE1;MAPS.forest.exits[0].ty=13;
-  MAPS.forest.exits[1].tx=gE2;MAPS.forest.exits[1].ty=14;
-  MAPS.mines.exits[0].tx=gW1;MAPS.mines.exits[0].ty=24;
-  MAPS.mines.exits[1].tx=gW2;MAPS.mines.exits[1].ty=25;
+  /* the single southern gate (egg tip ≈ x20,y33) → Whisperwood */
+  const gx=t.gate[0],gy=t.gate[1];
+  set(gx,gy,'E');set(gx,gy-1,'P');
+  t.exits=[{x:gx,y:gy,map:'forest',tx:30,ty:1}];
   /* street + landmark labels (rendered above the town in p6) */
   t.labels=[{x:20,y:6.4,t:'HAUPTSTR.'},{x:cx,y:8.4,t:'BLEICHSTR.'},{x:28,y:11.4,t:'KIRCHSTR.'},
-    {x:17,y:16.4,t:'MARKT'},{x:9,y:24.4,t:'PRÜMER TOR'},{x:36,y:13.4,t:'OSTTOR'},
+    {x:17,y:16.4,t:'MARKT'},{x:20,y:31.4,t:'SÜDTOR'},
     ...t.buildings.filter(b=>b.label).map(b=>({x:b.x+b.w/2,y:b.y+b.d-0.7,t:b.label}))];
   t.rows=g.map(r=>r.join(''));
+})();
+
+/* ---- generate the four huge biome regions + their dungeons ----------------
+   60×45 open fields bordered by blocking biome edges; sparse scattered
+   resources & decor (isolated tiles never disconnect the field); a north gate
+   back to the previous area, a south gate onward, and one dungeon mouth 'D'.
+   A dedicated seeded RNG keeps generation OFF Math.random so the gameplay/loot
+   stream (and the balance tests) stay identical run to run. */
+(function buildRegions(){
+  const RW=60,RH=45,RCx=30,DGx=14,DGy=14; /* region size, gate col, dungeon mouth */
+  function mkRng(seed){let s=seed>>>0;return()=>{s=(s+0x6D2B79F5)>>>0;
+    let x=Math.imul(s^s>>>15,1|s);x=(x+Math.imul(x^x>>>7,61|x))^x;return((x^x>>>14)>>>0)/4294967296;};}
+  const SPECS=[
+   {id:'forest',ground:'.',edge:'F',north:'town',south:'mountains',dungeon:'forest_dungeon',
+    res:[['T',34],['O',12],['C',8]],decor:[['X',6]],water:2,
+    mobs:{spider:9,boar:6,bandit:5}},
+   {id:'mountains',ground:'s',edge:'X',north:'forest',south:'plains',dungeon:'mountains_dungeon',
+    res:[['Y',20],['I',10],['Z',6]],decor:[['X',34]],water:0,
+    mobs:{frost_wolf:8,ice_sprite:6,snow_troll:5}},
+   {id:'plains',ground:'a',edge:'X',north:'mountains',south:'desert',dungeon:'plains_dungeon',
+    res:[['T',14],['I',8]],decor:[['X',10]],water:3,
+    mobs:{steppe_lion:8,war_hawk:6,nomad:5}},
+   {id:'desert',ground:'d',edge:'X',north:'plains',south:null,dungeon:'desert_dungeon',
+    res:[['Z',9]],decor:[['k',18],['X',12]],water:2,
+    mobs:{scorpion:8,sand_wraith:6,dune_raider:5}},
+  ];
+  const DUNG={
+   forest_dungeon:{adds:['spider','spider','bandit'],semi:'spider_matron',boss:'bandit_king'},
+   mountains_dungeon:{adds:['frost_wolf','ice_sprite','snow_troll'],semi:'ice_warden',boss:'frost_giant'},
+   plains_dungeon:{adds:['steppe_lion','war_hawk','nomad'],semi:'barrow_wight',boss:'plains_warlord'},
+   desert_dungeon:{adds:['scorpion','sand_wraith','dune_raider'],semi:'tomb_guardian',boss:'sand_pharaoh'},
+  };
+  const townGate=MAPS.town.gate;
+
+  function buildRegion(spec,seed){
+    const g=Array.from({length:RH},()=>new Array(RW).fill(spec.ground));
+    const rng=mkRng(seed),mobs=[];
+    const key=(x,y)=>x+','+y, reserved=new Set();
+    const reserve=(x,y,r)=>{for(let j=-r;j<=r;j++)for(let i=-r;i<=r;i++)reserved.add(key(x+i,y+j));};
+    /* solid biome border */
+    for(let x=0;x<RW;x++){g[0][x]=spec.edge;g[RH-1][x]=spec.edge;}
+    for(let y=0;y<RH;y++){g[y][0]=spec.edge;g[y][RW-1]=spec.edge;}
+    /* reserve gates, dungeon mouth + a clear central corridor */
+    reserve(RCx,1,2);reserve(RCx,RH-2,2);reserve(DGx,DGy,2);
+    for(let y=1;y<RH-1;y++)reserved.add(key(RCx,y));
+    const openTile=()=>{ /* random interior ground tile, not reserved */
+      for(let tries=0;tries<40;tries++){
+        const x=1+Math.floor(rng()*(RW-2)),y=1+Math.floor(rng()*(RH-2));
+        if(g[y][x]===spec.ground&&!reserved.has(key(x,y)))return[x,y];
+      }return null;};
+    /* water pools (small, blocking via '~') */
+    for(let i=0;i<spec.water;i++){const p=openTile();if(!p)continue;
+      for(let j=0;j<2;j++)for(let k=0;k<2;k++)if(g[p[1]+j]&&g[p[1]+j][p[0]+k]===spec.ground)g[p[1]+j][p[0]+k]='~';}
+    /* decor (blocking) then resources */
+    for(const[ch,n]of spec.decor)for(let i=0;i<n;i++){const p=openTile();if(p)g[p[1]][p[0]]=ch;}
+    for(const[ch,n]of spec.res)for(let i=0;i<n;i++){const p=openTile();if(p){g[p[1]][p[0]]=ch;reserved.add(key(p[0],p[1]));}}
+    /* mobs on open ground */
+    for(const t in spec.mobs)for(let i=0;i<spec.mobs[t];i++){const p=openTile();if(p){mobs.push({t,x:p[0],y:p[1]});reserved.add(key(p[0],p[1]));}}
+    /* gates + dungeon mouth (force-clear their tiles + approaches) */
+    g[0][RCx]='E';g[1][RCx]=spec.ground;
+    const exits=[];
+    const northArr = spec.north==='town' ? [townGate[0],townGate[1]-1] : [RCx,RH-2];
+    exits.push({x:RCx,y:0,map:spec.north,tx:northArr[0],ty:northArr[1]});
+    if(spec.south){g[RH-1][RCx]='E';g[RH-2][RCx]=spec.ground;
+      exits.push({x:RCx,y:RH-1,map:spec.south,tx:RCx,ty:1});}
+    g[DGy][DGx]='D';g[DGy+1][DGx]=spec.ground;
+    exits.push({x:DGx,y:DGy,map:spec.dungeon,tx:12,ty:15});
+    return{rows:g.map(r=>r.join('')),mobs,exits};
+  }
+
+  function buildDungeon(id,rid,seed){
+    const W=24,H=18,d=DUNG[id],rng=mkRng(seed),mobs=[];
+    const g=Array.from({length:H},()=>new Array(W).fill('#'));
+    for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++)g[y][x]=',';
+    /* a few rubble pillars for texture (kept off the central aisle) */
+    for(let i=0;i<10;i++){const x=2+Math.floor(rng()*(W-4)),y=2+Math.floor(rng()*(H-6));
+      if(Math.abs(x-12)>2)g[y][x]='X';}
+    /* back-exit to the region, spawn just inside */
+    g[H-1][12]='E';g[H-2][12]=',';g[H-3][12]=',';
+    mobs.push({t:d.boss,x:12,y:3});
+    mobs.push({t:d.semi,x:12,y:8});
+    d.adds.forEach((t,i)=>mobs.push({t,x:6+i*5,y:11}));
+    /* clear tiles under every entity so nothing spawns in a pillar */
+    for(const m of mobs){g[m.y][m.x]=',';}
+    const exits=[{x:12,y:H-1,map:rid,tx:DGx,ty:DGy+1}];
+    return{rows:g.map(r=>r.join('')),mobs,exits,ground:','};
+  }
+
+  SPECS.forEach((spec,i)=>{
+    const r=buildRegion(spec,0x51ed+i*0x1000);
+    MAPS[spec.id].rows=r.rows;MAPS[spec.id].mobs=r.mobs;MAPS[spec.id].exits=r.exits;
+    const dg=buildDungeon(spec.dungeon,spec.id,0x9a1c+i*0x1000);
+    MAPS[spec.dungeon].rows=dg.rows;MAPS[spec.dungeon].mobs=dg.mobs;MAPS[spec.dungeon].exits=dg.exits;
+  });
 })();
 
 /* ---------------- runtime world ---------------- */
@@ -582,6 +636,10 @@ function applySave(d){
   P.stats={...fp.stats,...(d.stats||{})};
   if(d.worldDrops)for(const m in d.worldDrops){if(world[m])world[m].drops=d.worldDrops[m];}
   delete P.worldDrops;
+  /* migrate stale saves: a map that no longer exists (old Mines/Ruins/Swamp)
+     would crash the renderer — send the hero home to town instead. */
+  if(!MAPS[P.map]){const s=MAPS.town.spawn;P.map='town';P.tx=s[0];P.ty=s[1];P.px=P.tx*TILE;P.py=P.ty*TILE;P.path=[];P.moving=null;}
+  if(P.grave&&!MAPS[P.grave.map])P.grave=null;
   P.hp=clamp(P.hp,1,maxHp());
 }
 function load(){
@@ -1004,6 +1062,24 @@ function buildSprites(){
     p(5,6,6,8,'#6a716c');p(6,4,4,3,'#6a716c');p(6,5,4,1,'#757c76');
     p(7,8,2,1,'#525a54');p(6,10,4,1,'#525a54');});
   SPR['E']=mk(32,32,(g,p)=>{g.drawImage(SPR['P'],0,0);p(6,7,5,2,'#e8b64c');p(10,5,2,2,'#e8b64c');p(10,9,2,2,'#e8b64c');});
+  /* ---- biome grounds (snow / savanna / desert sand) ---- */
+  SPR['s']=noiseTile('#e2e9f1',['#d1dbe6','#f2f6fa','#c6d0dc'],9);
+  SPR['a']=noiseTile('#a89a4e',['#8f833c','#b8ab5e','#9c8f45'],14);
+  SPR['d']=noiseTile('#d8c489',['#cbb677','#e6d6a0','#c9b06f'],8);
+  /* ---- town wall (dressed stone), cactus, dungeon mouth ---- */
+  SPR['K']=mk(32,32,(g,p)=>{g.fillStyle='#5b5f66';g.fillRect(0,0,32,32);
+    for(let r=0;r<4;r++)for(let c2=0;c2<4;c2++){const off=r%2?2:0;
+      p((c2*4+off)%16,r*4,3,3,'#666b73');p((c2*4+off)%16,r*4,3,1,'#7b818a');p((c2*4+off)%16,r*4+3,3,1,'#43464c');}
+    p(0,0,16,1,'#8b929c');p(0,1,16,1,'#3a3d42');}); /* bright battlement cap + shadow line */
+  SPR['k']=mk(32,32,(g,p)=>{g.drawImage(SPR['d'],0,0);
+    p(6,4,3,10,'#3f7a3a');p(6,4,1,10,'#2f5c2c');p(6,4,3,1,'#5aa050');
+    p(3,7,3,2,'#3f7a3a');p(3,5,2,3,'#3f7a3a');p(9,9,3,2,'#3f7a3a');p(11,7,2,3,'#3f7a3a');
+    p(7,6,1,1,'#dfeecb');p(4,6,1,1,'#dfeecb');p(10,10,1,1,'#dfeecb');});
+  SPR['D']=mk(32,32,(g,p)=>{
+    p(1,3,14,13,'#57524b');p(1,3,14,1,'#655e54');p(1,15,14,1,'#3a3630');
+    p(0,6,2,9,'#4c4841');p(14,6,2,9,'#4c4841');
+    p(4,7,8,9,'#0d0b08');p(4,7,8,2,'#060504');p(5,6,6,1,'#3a3630');
+    p(2,13,2,3,'#e8642c');p(2,12,1,1,'#ffb060');});
   /* ---- resources ---- */
   SPR.tree=mk(32,48,(g,p)=>{
     p(7,17,2,7,'#5b4632');p(6,22,4,2,'#4e3b29');
@@ -1024,113 +1100,190 @@ function buildSprites(){
     p(4,5,4,2,'#5b5956');p(6,8,2,2,'#9fb0bd');p(10,10,2,2,'#9fb0bd');p(4,11,2,1,'#9fb0bd');});
   SPR.rubble=mk(32,32,(g,p)=>{
     p(4,11,3,2,'#4c4841');p(9,12,3,2,'#57524b');p(7,9,2,2,'#4c4841');});
+  SPR.pine=mk(32,48,(g,p)=>{
+    p(7,17,2,7,'#4e3b29');p(6,22,4,2,'#42311f');
+    p(4,4,8,10,'#2c4a44');p(6,1,4,4,'#2c4a44');p(2,8,12,5,'#2c4a44');
+    p(5,5,3,3,'#3f6a5f');p(9,8,2,3,'#3f6a5f');p(3,10,3,2,'#22403a');
+    p(3,4,10,2,'#e6f0f6');p(2,9,4,1,'#e6f0f6');p(10,10,3,1,'#e6f0f6');});
+  SPR.crystal=mk(32,32,(g,p)=>{
+    p(3,8,10,6,'#4c4841');p(2,11,12,3,'#44423f');p(3,8,10,1,'#5b5651');
+    p(5,3,2,8,'#66e0ff');p(5,3,1,8,'#bfefff');
+    p(8,5,2,7,'#7af0c9');p(8,5,1,5,'#c9fff0');
+    p(3,7,2,4,'#9b7fd1');p(11,7,2,4,'#9b7fd1');});
 
   /* ---- player paper-doll (rebuilt whenever equipment changes) ---- */
   rebuildPlayerSprite();
 
-  /* ---- mobs (detailed 1px art, feet ~y30; procedural bob/lunge in p6) ---- */
-  SPR.goblin=mkPix(32,32,(g,q)=>{
+  /* ---- biome mobs (detailed 1px art, feet ~y30; procedural bob/lunge in p6) ---- */
+  /* ===== Whisperwood ===== */
+  SPR.spider=mkPix(32,32,(g,q)=>{
+    q(7,28,18,2,'#00000030');
+    q(2,16,7,1,'#241d1a');q(1,13,3,3,'#241d1a');q(2,21,7,1,'#241d1a');q(1,23,3,3,'#241d1a');
+    q(23,16,7,1,'#241d1a');q(28,13,3,3,'#241d1a');q(23,21,7,1,'#241d1a');q(28,23,3,3,'#241d1a');
+    q(11,15,11,11,'#3a2f2a');q(12,16,9,8,'#48392f');q(11,15,11,1,'#55433a');
+    q(11,9,10,7,'#3a2f2a');q(12,10,8,5,'#48392f');
+    q(13,11,2,2,'#d94a3a');q(17,11,2,2,'#d94a3a');q(13,11,1,1,'#ff8a6a');q(17,11,1,1,'#ff8a6a');
+    q(15,8,2,2,'#241d1a');});
+  SPR.boar=mkPix(32,32,(g,q)=>{
+    q(5,28,22,2,'#00000030');
+    q(6,15,17,10,'#6e5442');q(7,16,15,6,'#7d6350');q(6,15,17,1,'#8a6f5a');q(3,17,4,7,'#5e4636');
+    q(22,13,7,9,'#7d6350');q(23,14,5,5,'#8a6f5a');q(27,11,2,3,'#5e4636');
+    q(28,17,3,3,'#8a6f5a');q(24,16,1,1,'#2b2b2b');q(27,20,1,2,'#e8e2c8');q(24,21,1,2,'#e8e2c8');
+    q(9,17,10,2,'#5e4636');
+    q(8,24,3,6,'#5e4636');q(13,24,3,6,'#6e5442');q(18,24,3,6,'#5e4636');
+    q(8,29,3,1,'#463527');q(13,29,3,1,'#463527');q(18,29,3,1,'#463527');});
+  SPR.bandit=mkPix(32,32,(g,q)=>{
     q(8,30,15,2,'#00000030');
-    q(11,25,4,6,'#4c6b28');q(17,25,4,6,'#4c6b28');q(11,30,4,1,'#2f451c');q(17,30,4,1,'#2f451c');
-    q(9,16,14,10,'#6f8f3f');q(10,17,12,7,'#7ba046');q(9,16,14,1,'#8ab355');q(9,23,14,2,'#59401f');
-    q(6,17,3,8,'#5d7a33');q(23,17,3,8,'#5d7a33');q(6,23,3,2,'#7ba046');q(23,23,3,2,'#7ba046');
-    q(8,5,16,12,'#6f8f3f');q(8,5,16,1,'#8ab355');q(10,15,12,2,'#5d7a33');
-    q(5,7,3,5,'#5d7a33');q(24,7,3,5,'#5d7a33');q(5,7,1,5,'#4e6629');q(26,7,1,5,'#4e6629');
-    q(12,9,4,3,'#e6ee55');q(18,9,4,3,'#e6ee55');q(14,10,1,2,'#2b2b2b');q(20,10,1,2,'#2b2b2b');
-    q(11,8,4,1,'#3a5220');q(18,8,4,1,'#3a5220');q(15,11,2,3,'#5d7a33');
-    q(12,14,9,1,'#e8e2c8');q(13,14,1,2,'#dcd6bc');q(19,14,1,2,'#dcd6bc');});
-  SPR.wolf=mkPix(32,32,(g,q)=>{
+    q(10,12,12,18,'#3a5233');q(11,13,10,16,'#46613d');q(10,12,12,1,'#557049');q(11,28,10,2,'#2c3f26');
+    q(9,5,14,9,'#33482d');q(9,5,14,1,'#3f5735');q(11,9,10,5,'#160f12');
+    q(13,10,3,2,'#e8e2c8');q(17,10,3,2,'#e8e2c8');q(14,10,1,1,'#2b2b2b');q(18,10,1,1,'#2b2b2b');
+    q(7,14,3,10,'#33482d');q(23,14,3,10,'#33482d');
+    q(26,6,1,18,'#8a6a42');q(25,6,1,3,'#8a6a42');q(25,21,1,3,'#8a6a42');q(28,9,1,12,'#d8d5c8');});
+  /* ===== Frostpeak Mountains ===== */
+  SPR.frost_wolf=mkPix(32,32,(g,q)=>{
     q(4,28,23,2,'#00000030');
-    q(4,15,20,9,'#8b8b8b');q(5,16,18,5,'#9a9a9a');q(4,15,20,1,'#a5a5a5');q(1,16,4,8,'#7c7c7c');
-    q(21,10,8,9,'#9a9a9a');q(22,11,6,6,'#a5a5a5');q(27,8,2,4,'#7c7c7c');q(24,8,2,3,'#7c7c7c');
-    q(28,14,3,3,'#8b8b8b');q(26,13,2,2,'#d94a3a');q(30,15,1,1,'#2b2b2b');q(24,16,4,1,'#6f6f6f');
-    q(6,23,3,7,'#6f6f6f');q(11,23,3,7,'#7c7c7c');q(17,23,3,7,'#6f6f6f');q(21,23,3,7,'#7c7c7c');
-    q(6,29,3,1,'#555555');q(11,29,3,1,'#555555');q(17,29,3,1,'#555555');q(21,29,3,1,'#555555');});
-  SPR.rat=mkPix(32,32,(g,q)=>{
-    q(6,28,18,2,'#00000030');
-    q(7,18,15,7,'#8a6b52');q(8,19,13,4,'#96775f');q(7,18,15,1,'#a8886e');
-    q(2,20,6,2,'#c9a68a');q(1,21,3,1,'#c9a68a');
-    q(20,15,7,8,'#96775f');q(21,16,5,5,'#a8886e');q(25,13,2,3,'#7d6350');q(22,13,2,3,'#7d6350');
-    q(26,18,3,2,'#a8886e');q(24,17,1,1,'#2b2b2b');q(28,18,1,1,'#2b2b2b');
-    q(9,24,2,6,'#6e5442');q(14,24,2,6,'#7d6350');q(18,24,2,6,'#6e5442');});
-  SPR.skeleton=mkPix(32,32,(g,q)=>{
-    q(9,30,13,2,'#00000030');
-    q(12,24,3,7,'#c9c6b8');q(17,24,3,7,'#c9c6b8');
-    q(11,15,10,10,'#171512');q(10,15,12,2,'#d8d5c8');q(10,18,12,1,'#c9c6b8');q(10,21,12,1,'#c9c6b8');
-    q(10,15,1,10,'#d8d5c8');q(21,15,1,10,'#d8d5c8');q(7,15,3,7,'#c9c6b8');q(22,15,3,7,'#c9c6b8');
-    q(10,5,12,11,'#e0ddd0');q(10,5,12,1,'#efece0');
-    q(12,9,3,3,'#171512');q(17,9,3,3,'#171512');q(13,10,1,1,'#66e0ff');q(18,10,1,1,'#66e0ff');
-    q(13,14,6,1,'#171512');q(13,14,1,1,'#e0ddd0');q(15,14,1,1,'#e0ddd0');q(17,14,1,1,'#e0ddd0');
-    q(26,6,2,20,'#8a6a42');q(25,6,1,4,'#8a6a42');q(25,22,1,4,'#8a6a42');q(28,9,1,14,'#d8d5c8');});
-  SPR.cultist=mkPix(32,32,(g,q)=>{
+    q(4,15,20,9,'#c9d6e2');q(5,16,18,5,'#dbe6f0');q(4,15,20,1,'#eef4fa');q(1,16,4,8,'#b3c2d2');
+    q(21,10,8,9,'#dbe6f0');q(22,11,6,6,'#eef4fa');q(27,8,2,4,'#b3c2d2');q(24,8,2,3,'#b3c2d2');
+    q(28,14,3,3,'#c9d6e2');q(26,13,2,2,'#66e0ff');q(30,15,1,1,'#2b2b2b');q(24,16,4,1,'#a6b6c8');
+    q(6,23,3,7,'#a6b6c8');q(11,23,3,7,'#b3c2d2');q(17,23,3,7,'#a6b6c8');q(21,23,3,7,'#b3c2d2');
+    q(6,29,3,1,'#8a9aac');q(11,29,3,1,'#8a9aac');q(17,29,3,1,'#8a9aac');q(21,29,3,1,'#8a9aac');});
+  SPR.ice_sprite=mkPix(32,32,(g,q)=>{
+    q(9,28,14,2,'#00000020');
+    q(11,10,10,12,'#8fe0ff');q(12,11,8,9,'#bfefff');q(11,10,10,1,'#e6f9ff');
+    q(13,6,6,6,'#8fe0ff');q(14,7,4,4,'#e6f9ff');
+    q(13,13,2,2,'#1f6f9a');q(17,13,2,2,'#1f6f9a');
+    q(8,14,3,1,'#c9fff0');q(21,14,3,1,'#c9fff0');q(15,3,1,3,'#c9fff0');
+    q(9,20,2,5,'#8fe0ff');q(21,20,2,5,'#8fe0ff');q(15,22,2,6,'#8fe0ff');
+    q(6,10,2,2,'#e6f9ff55');q(24,18,2,2,'#e6f9ff55');});
+  SPR.snow_troll=mkPix(32,32,(g,q)=>{
+    q(6,29,20,2,'#00000030');
+    q(6,12,20,17,'#cdd8e2');q(7,13,18,14,'#dde7ef');q(6,12,20,1,'#eef4fa');
+    q(2,14,5,11,'#b9c6d4');q(25,14,5,11,'#b9c6d4');
+    q(9,6,14,9,'#cdd8e2');q(9,6,14,1,'#eef4fa');
+    q(11,9,3,2,'#1f6f9a');q(18,9,3,2,'#1f6f9a');q(12,9,1,1,'#66e0ff');q(19,9,1,1,'#66e0ff');
+    q(12,13,8,1,'#8a9aac');q(13,11,1,2,'#e8e2c8');q(18,11,1,2,'#e8e2c8');
+    q(9,26,6,4,'#9fb0bd');q(17,26,6,4,'#9fb0bd');q(9,29,6,1,'#7f90a0');q(17,29,6,1,'#7f90a0');});
+  /* ===== Golden Plains ===== */
+  SPR.steppe_lion=mkPix(32,32,(g,q)=>{
+    q(4,28,23,2,'#00000030');
+    q(4,15,20,9,'#cba064');q(5,16,18,5,'#d8b078');q(4,15,20,1,'#e6c48e');q(2,22,3,6,'#a9793f');
+    q(20,9,10,11,'#a9793f');q(22,11,7,8,'#d8b078');q(23,12,5,5,'#e6c48e');
+    q(28,14,3,3,'#cba064');q(26,13,2,2,'#2b2b2b');q(30,15,1,1,'#2b2b2b');q(24,17,4,1,'#8a6a42');
+    q(6,23,3,7,'#b98d52');q(11,23,3,7,'#cba064');q(17,23,3,7,'#b98d52');q(21,23,3,7,'#cba064');
+    q(6,29,3,1,'#8a6a42');q(11,29,3,1,'#8a6a42');q(17,29,3,1,'#8a6a42');q(21,29,3,1,'#8a6a42');});
+  SPR.war_hawk=mkPix(32,32,(g,q)=>{
+    q(9,28,14,2,'#00000030');
+    q(13,12,6,12,'#6e5236');q(14,13,4,9,'#7d6144');q(13,12,6,1,'#8a6f52');
+    q(2,10,11,4,'#5e4630');q(3,9,8,2,'#6e5236');q(1,12,5,2,'#4e3826');
+    q(19,10,11,4,'#5e4630');q(21,9,8,2,'#6e5236');q(26,12,5,2,'#4e3826');
+    q(13,7,6,6,'#7d6144');q(14,8,4,4,'#8a6f52');
+    q(14,9,1,2,'#f0c419');q(17,9,1,2,'#f0c419');q(15,11,2,2,'#e8b64c');q(15,12,2,1,'#c98b2c');
+    q(14,24,2,4,'#e8b64c');q(17,24,2,4,'#e8b64c');});
+  SPR.nomad=mkPix(32,32,(g,q)=>{
     q(8,30,15,2,'#00000030');
-    q(8,10,16,20,'#5a3d6b');q(9,11,14,18,'#664577');q(8,10,16,1,'#755088');q(9,28,14,2,'#3f2a4d');
-    q(9,4,14,9,'#4a3159');q(9,4,14,1,'#5a3d6b');q(11,8,10,5,'#160f1c');
-    q(12,9,3,2,'#d94af0');q(17,9,3,2,'#d94af0');q(12,9,1,1,'#ff9cff');q(17,9,1,1,'#ff9cff');
-    q(6,13,3,10,'#5a3d6b');q(23,13,3,10,'#5a3d6b');
-    q(26,4,2,24,'#6b5138');q(25,2,4,4,'#b06fd1');q(26,2,2,2,'#d9a5f0');});
-  SPR.gargoyle=mkPix(32,32,(g,q)=>{
-    q(8,30,16,2,'#00000030');
-    q(0,8,8,12,'#5c6269');q(1,9,6,9,'#6a7077');q(0,8,3,14,'#565c63');
-    q(24,8,8,12,'#5c6269');q(25,9,6,9,'#6a7077');q(29,8,3,14,'#565c63');
-    q(8,10,16,14,'#7a8087');q(9,11,14,11,'#868c93');q(8,10,16,1,'#949aa1');
-    q(10,4,12,8,'#7a8087');q(10,4,12,1,'#949aa1');q(8,2,3,4,'#5c6269');q(21,2,3,4,'#5c6269');
-    q(11,7,4,3,'#f0a020');q(17,7,4,3,'#f0a020');q(12,8,2,2,'#ffd060');q(18,8,2,2,'#ffd060');
-    q(12,11,8,2,'#3a3e44');q(13,12,1,2,'#868c93');q(18,12,1,2,'#868c93');
-    q(11,22,4,8,'#6a7077');q(17,22,4,8,'#6a7077');q(11,29,4,1,'#4c5157');q(17,29,4,1,'#4c5157');});
-  SPR.bogstalker=mkPix(32,32,(g,q)=>{
+    q(9,11,14,19,'#b89a5e');q(10,12,12,17,'#c7aa6c');q(9,11,14,1,'#d6bb7e');q(10,28,12,2,'#8f7745');
+    q(9,4,14,9,'#a98a4e');q(9,4,14,1,'#c7aa6c');q(11,8,10,5,'#2a2018');q(9,3,14,2,'#8f7745');
+    q(12,9,3,2,'#e8e2c8');q(17,9,3,2,'#e8e2c8');q(13,9,1,1,'#2b2b2b');q(18,9,1,1,'#2b2b2b');
+    q(7,13,3,10,'#a98a4e');q(23,13,3,10,'#a98a4e');
+    q(26,4,2,24,'#6b5138');q(25,2,4,4,'#e8b64c');q(26,2,2,2,'#ffe98a');});
+  /* ===== Ashen Desert ===== */
+  SPR.scorpion=mkPix(32,32,(g,q)=>{
+    q(6,28,20,2,'#00000030');
+    q(9,18,14,7,'#b98d52');q(10,19,12,4,'#cba064');q(9,18,14,1,'#d8b078');
+    q(3,16,5,2,'#a9793f');q(2,14,3,3,'#b98d52');q(1,15,2,2,'#8a6a42');
+    q(24,16,5,2,'#a9793f');q(29,14,2,3,'#b98d52');
+    q(9,25,2,4,'#8a6a42');q(13,25,2,4,'#8a6a42');q(17,25,2,4,'#8a6a42');
+    q(22,14,2,4,'#b98d52');q(23,11,2,3,'#b98d52');q(24,9,2,3,'#cba064');q(24,7,3,2,'#d8b078');q(26,6,2,2,'#2b2320');
+    q(12,19,1,1,'#2b2b2b');q(15,19,1,1,'#2b2b2b');});
+  SPR.sand_wraith=mkPix(32,32,(g,q)=>{
+    q(8,29,15,2,'#00000020');
+    q(9,10,14,17,'#c9bfa0');q(10,11,12,15,'#d8cfb2');q(9,10,14,1,'#e6ddc2');
+    q(11,25,2,4,'#c9bfa0');q(15,26,2,3,'#c9bfa0');q(19,25,2,4,'#c9bfa0');
+    q(10,5,12,7,'#b8ac8a');q(10,5,12,1,'#d8cfb2');
+    q(12,8,3,2,'#e8b64c');q(17,8,3,2,'#e8b64c');q(13,8,1,1,'#fff0a0');q(18,8,1,1,'#fff0a0');
+    q(7,13,3,9,'#b8ac8a');q(22,13,3,9,'#b8ac8a');
+    q(4,6,3,3,'#e8b64c33');q(25,17,3,3,'#e8b64c33');});
+  SPR.dune_raider=mkPix(32,32,(g,q)=>{
     q(8,30,15,2,'#00000030');
-    q(9,10,14,16,'#4e6b3f');q(10,11,12,14,'#587a48');q(9,10,14,1,'#688a53');
-    q(7,6,18,6,'#42592f');q(9,7,14,4,'#4e6b3f');q(10,12,12,1,'#3a4d2a');
-    q(11,8,3,2,'#e0e04a');q(17,8,3,2,'#e0e04a');q(12,8,1,1,'#ffffa0');q(18,8,1,1,'#ffffa0');
-    q(13,14,2,1,'#3a4d2a');q(17,16,2,1,'#3a4d2a');q(11,19,2,1,'#3a4d2a');
-    q(6,12,3,11,'#42592f');q(23,12,3,11,'#42592f');
-    q(11,24,4,6,'#42592f');q(17,24,4,6,'#42592f');q(11,29,4,1,'#2f4020');q(17,29,4,1,'#2f4020');
-    q(28,6,2,18,'#6b5138');q(27,6,1,3,'#6b5138');q(27,21,1,3,'#6b5138');q(30,9,1,12,'#d8d5c8');});
-  SPR.hagspawn=mkPix(32,32,(g,q)=>{
-    q(7,30,17,2,'#00000030');
-    q(7,8,18,20,'#3f5a52');q(8,9,16,17,'#496860');q(7,8,18,1,'#587a70');q(9,6,14,4,'#354943');
-    q(11,12,3,3,'#7af0c9');q(18,12,3,3,'#7af0c9');q(11,12,1,1,'#c9fff0');q(18,12,1,1,'#c9fff0');
-    q(12,19,8,2,'#243530');q(13,20,1,2,'#7af0c9');q(18,20,1,2,'#7af0c9');
-    q(5,3,4,4,'#7af0c955');q(23,3,4,4,'#7af0c955');
-    q(6,14,3,8,'#354943');q(23,14,3,8,'#354943');q(9,26,5,4,'#354943');q(18,26,5,4,'#354943');});
-  /* bosses: bigger detailed art, rendered at 2x (see draw()) */
-  SPR.goblin_king=mkPix(32,32,(g,q)=>{
+    q(10,12,12,18,'#7a5a3a');q(11,13,10,16,'#8a6a45');q(10,12,12,1,'#9a7a52');q(11,28,10,2,'#5e4630');
+    q(9,5,14,9,'#6b4e33');q(9,5,14,1,'#8a6a45');q(11,9,10,4,'#1c130c');q(9,4,14,2,'#5e4630');
+    q(13,10,3,2,'#e8e2c8');q(17,10,3,2,'#e8e2c8');q(14,10,1,1,'#2b2b2b');q(18,10,1,1,'#2b2b2b');
+    q(7,14,3,10,'#6b4e33');q(23,14,3,10,'#6b4e33');
+    q(26,6,1,18,'#8a6a42');q(25,6,1,3,'#8a6a42');q(25,21,1,3,'#8a6a42');q(28,9,1,12,'#d8d5c8');});
+
+  /* ---- dungeon semi-bosses (elite, normal size, name bar in p6) ---- */
+  SPR.spider_matron=mkPix(32,32,(g,q)=>{
+    q(5,29,22,2,'#00000030');
+    q(1,15,7,1,'#241d1a');q(0,12,3,3,'#241d1a');q(1,22,7,1,'#241d1a');q(0,24,3,3,'#241d1a');
+    q(24,15,7,1,'#241d1a');q(29,12,3,3,'#241d1a');q(24,22,7,1,'#241d1a');q(29,24,3,3,'#241d1a');
+    q(9,15,14,12,'#332824');q(10,16,12,9,'#443229');q(9,15,14,1,'#55433a');q(12,17,8,5,'#7a3f8a');
+    q(11,9,10,8,'#332824');q(12,10,8,6,'#443229');
+    q(12,11,2,2,'#d94a3a');q(18,11,2,2,'#d94a3a');q(12,11,1,1,'#ff8a6a');q(18,11,1,1,'#ff8a6a');
+    q(14,8,4,2,'#241d1a');q(13,16,1,1,'#b06fd1');q(18,16,1,1,'#b06fd1');});
+  SPR.ice_warden=mkPix(32,32,(g,q)=>{
+    q(8,30,15,2,'#00000030');
+    q(8,11,16,19,'#2f5a72');q(9,12,14,17,'#376a86');q(8,11,16,1,'#4a86a6');q(9,28,14,2,'#204152');
+    q(10,3,12,10,'#bfefff');q(10,3,12,1,'#e6f9ff');
+    q(12,7,3,3,'#1f6f9a');q(17,7,3,3,'#1f6f9a');q(13,8,1,1,'#66e0ff');q(18,8,1,1,'#66e0ff');
+    q(13,11,6,1,'#171512');q(6,13,3,12,'#2f5a72');q(23,13,3,12,'#2f5a72');
+    q(11,1,10,3,'#8fe0ff');q(14,0,4,2,'#e6f9ff');
+    q(27,1,2,27,'#4a6a7a');q(25,0,6,5,'#8fe0ff');q(27,1,2,2,'#e6f9ff');});
+  SPR.barrow_wight=mkPix(32,32,(g,q)=>{
+    q(8,30,15,2,'#00000030');
+    q(8,11,16,19,'#33403a');q(9,12,14,17,'#3e4d45');q(8,11,16,1,'#4c5c52');q(9,28,14,2,'#232c27');
+    q(10,4,12,9,'#8a9a86');q(10,4,12,1,'#a2b2a0');
+    q(12,8,3,3,'#171512');q(17,8,3,3,'#171512');q(13,9,1,1,'#9bffb0');q(18,9,1,1,'#9bffb0');
+    q(13,12,6,1,'#171512');q(13,12,1,1,'#8a9a86');q(16,12,1,1,'#8a9a86');
+    q(6,13,3,11,'#33403a');q(23,13,3,11,'#33403a');q(7,14,2,3,'#8a9a86');q(24,14,2,3,'#8a9a86');
+    q(10,2,12,3,'#5a6a3a');q(13,1,6,2,'#6a7a45');
+    q(27,3,2,25,'#3a3020');q(25,1,5,5,'#9bffb055');});
+  SPR.tomb_guardian=mkPix(32,32,(g,q)=>{
+    q(8,30,15,2,'#00000030');
+    q(9,25,4,6,'#3a2f1a');q(19,25,4,6,'#3a2f1a');
+    q(9,13,14,13,'#b8912c');q(10,14,12,10,'#d0a83a');q(9,13,14,1,'#e6c451');
+    q(9,17,14,2,'#2b3a5a');q(9,21,14,1,'#2b3a5a');q(6,14,3,10,'#a07f26');q(23,14,3,10,'#a07f26');
+    q(11,4,10,10,'#0f0d0a');q(10,4,12,1,'#d0a83a');q(9,2,4,5,'#d0a83a');q(19,2,4,5,'#d0a83a');
+    q(13,9,2,2,'#e8642c');q(17,9,2,2,'#e8642c');q(12,12,8,2,'#2b3a5a');q(12,13,8,1,'#e6c451');});
+
+  /* ---- dungeon bosses (big 2× sprite, see draw()) ---- */
+  SPR.bandit_king=mkPix(32,32,(g,q)=>{
     q(7,30,18,2,'#00000030');
-    q(10,25,5,6,'#3f5222');q(17,25,5,6,'#3f5222');q(10,30,5,1,'#2a3818');q(17,30,5,1,'#2a3818');
-    q(8,16,16,10,'#5d7a33');q(9,17,14,7,'#6a8a3c');q(8,16,16,1,'#7ba046');
-    q(8,20,16,2,'#4a4a52');q(8,22,16,1,'#3a3a42');q(5,17,4,8,'#4e6629');q(23,17,4,8,'#4e6629');
-    q(8,6,16,11,'#5d7a33');q(8,6,16,1,'#7ba046');q(4,8,4,5,'#4e6629');q(24,8,4,5,'#4e6629');
-    q(11,10,4,3,'#f0e04a');q(17,10,4,3,'#f0e04a');q(13,11,1,2,'#2b2b2b');q(19,11,1,2,'#2b2b2b');
-    q(12,15,9,1,'#e8e2c8');q(13,15,1,2,'#dcd6bc');q(19,15,1,2,'#dcd6bc');
-    q(9,2,14,4,'#f0c419');q(9,2,14,1,'#ffe98a');q(9,1,2,2,'#f0c419');q(15,0,2,3,'#f0c419');q(21,1,2,2,'#f0c419');q(15,3,2,2,'#e8642c');});
-  SPR.rock_horror=mkPix(32,32,(g,q)=>{
+    q(9,25,5,6,'#2c3f26');q(18,25,5,6,'#2c3f26');q(9,30,5,1,'#1f2c1a');q(18,30,5,1,'#1f2c1a');
+    q(8,15,16,11,'#5a2f2f');q(9,16,14,8,'#6e3a3a');q(8,15,16,1,'#864545');
+    q(8,19,16,2,'#3a2a1a');q(15,20,2,1,'#e8b64c');q(5,16,4,9,'#4a2626');q(23,16,4,9,'#4a2626');
+    q(9,6,14,10,'#c99b6a');q(9,6,14,1,'#d8ac7c');
+    q(11,10,4,3,'#2b2b2b');q(17,10,4,3,'#2b2b2b');q(12,11,1,2,'#e8642c');q(18,11,1,2,'#e8642c');
+    q(11,14,10,1,'#6e4b33');q(10,15,12,2,'#5e3f2a');
+    q(9,1,14,5,'#f0c419');q(9,1,14,1,'#ffe98a');q(10,0,2,2,'#f0c419');q(15,0,2,2,'#f0c419');q(20,0,2,2,'#f0c419');q(15,2,2,2,'#d94a3a');
+    q(24,14,2,14,'#cbd0d8');q(24,14,1,14,'#eef1f5');q(23,26,4,2,'#8a6a42');});
+  SPR.frost_giant=mkPix(32,32,(g,q)=>{
+    q(5,30,22,2,'#00000030');
+    q(6,11,20,18,'#c2d2e2');q(7,12,18,15,'#d6e3ef');q(6,11,20,1,'#eef5fb');
+    q(1,13,6,13,'#aec0d2');q(25,13,6,13,'#aec0d2');
+    q(9,4,14,10,'#c2d2e2');q(9,4,14,1,'#eef5fb');q(8,2,4,4,'#bfefff');q(20,2,4,4,'#bfefff');
+    q(11,7,3,3,'#1f6f9a');q(18,7,3,3,'#1f6f9a');q(12,8,1,1,'#66e0ff');q(19,8,1,1,'#66e0ff');
+    q(11,12,10,1,'#8497aa');q(12,10,1,3,'#e8f2fa');q(19,10,1,3,'#e8f2fa');
+    q(9,26,7,4,'#9fb0bd');q(17,26,7,4,'#9fb0bd');q(9,29,7,1,'#7f90a0');q(17,29,7,1,'#7f90a0');});
+  SPR.plains_warlord=mkPix(32,32,(g,q)=>{
     q(6,30,20,2,'#00000030');
-    q(6,8,20,20,'#5f5b54');q(7,9,18,17,'#6b665e');q(6,8,20,1,'#787269');
-    q(4,12,3,10,'#524e48');q(25,12,3,10,'#524e48');
-    q(9,11,5,3,'#e8642c');q(18,11,5,3,'#e8642c');q(10,12,2,1,'#ffb060');q(19,12,2,1,'#ffb060');
-    q(8,18,16,2,'#e8642c');q(9,18,3,1,'#ffb060');q(20,18,3,1,'#ffb060');
-    q(11,15,2,3,'#3a3630');q(19,22,2,3,'#3a3630');q(14,9,2,4,'#3a3630');
-    q(13,20,1,4,'#e8642c');q(16,17,1,3,'#e8642c');q(9,26,6,4,'#4a463f');q(17,26,6,4,'#4a463f');});
-  SPR.lich=mkPix(32,32,(g,q)=>{
-    q(8,30,15,2,'#00000030');
-    q(8,12,16,18,'#2c3e50');q(9,13,14,16,'#35485c');q(8,12,16,1,'#3d5266');q(9,28,14,2,'#1f2c3a');
-    q(10,4,12,10,'#e0ddd0');q(10,4,12,1,'#efece0');
-    q(12,8,3,3,'#66e0ff');q(17,8,3,3,'#66e0ff');q(12,8,1,1,'#c9f5ff');q(17,8,1,1,'#c9f5ff');
-    q(13,12,6,1,'#171512');q(13,12,1,1,'#e0ddd0');q(15,12,1,1,'#e0ddd0');q(17,12,1,1,'#e0ddd0');
-    q(6,14,3,12,'#2c3e50');q(23,14,3,12,'#2c3e50');q(7,15,2,3,'#c9c6b8');q(24,15,2,3,'#c9c6b8');
-    q(10,1,12,4,'#f0c419');q(10,1,12,1,'#ffe98a');q(11,0,2,2,'#f0c419');q(15,0,2,2,'#f0c419');q(19,0,2,2,'#f0c419');
-    q(27,2,2,26,'#4a3a2a');q(25,1,6,5,'#66e0ff');q(27,2,2,2,'#c9f5ff');});
-  SPR.swamp_hag=mkPix(32,32,(g,q)=>{
-    q(7,30,17,2,'#00000030');
-    q(8,12,16,18,'#354a42');q(9,13,14,16,'#3e564c');q(8,12,16,1,'#4a6558');q(9,28,14,2,'#26352f');
-    q(10,6,12,8,'#4a5f45');q(10,6,12,1,'#587a53');
-    q(11,9,3,3,'#7af0c9');q(18,9,3,3,'#7af0c9');q(11,9,1,1,'#c9fff0');q(18,9,1,1,'#c9fff0');
-    q(13,12,6,1,'#243530');q(14,13,1,2,'#7af0c9');q(17,13,1,2,'#7af0c9');q(15,10,2,2,'#3e564c');
-    q(8,4,16,3,'#2a3830');q(13,0,6,5,'#2a3830');q(14,0,4,1,'#3a4d42');q(15,2,2,2,'#7af0c9');
-    q(6,14,3,12,'#2c3e37');q(23,14,3,12,'#2c3e37');
-    q(27,2,2,26,'#4a3626');q(25,1,5,4,'#4e8a6d');q(26,2,2,2,'#7af0c9');
-    q(3,3,4,4,'#7af0c955');q(25,20,4,4,'#7af0c944');});
+    q(9,25,5,6,'#4a3a2a');q(18,25,5,6,'#4a3a2a');q(9,30,5,1,'#332619');q(18,30,5,1,'#332619');
+    q(7,13,18,13,'#8a5a3a');q(8,14,16,10,'#a06a44');q(7,13,18,1,'#b87a50');
+    q(7,17,18,2,'#c98b2c');q(14,15,4,6,'#c98b2c');q(3,14,5,11,'#6e4a30');q(24,14,5,11,'#6e4a30');
+    q(9,5,14,9,'#b8895c');q(9,5,14,1,'#c99b6a');
+    q(11,9,3,2,'#2b2b2b');q(18,9,3,2,'#2b2b2b');q(12,10,1,1,'#e8642c');q(19,10,1,1,'#e8642c');
+    q(11,13,10,1,'#5e3f2a');q(8,1,16,5,'#7d8590');q(8,1,16,1,'#9aa4ad');q(14,0,4,2,'#c94a3a');
+    q(2,8,3,18,'#8a6a42');q(0,6,6,4,'#b8c4cf');q(0,6,6,1,'#d8e0e8');});
+  SPR.sand_pharaoh=mkPix(32,32,(g,q)=>{
+    q(7,30,18,2,'#00000030');
+    q(8,13,16,17,'#c9a83a');q(9,14,14,14,'#dcc04e');q(8,13,16,1,'#efd66a');q(9,28,14,2,'#a07f26');
+    q(8,17,16,2,'#2b3a6a');q(8,21,16,1,'#2b3a6a');
+    q(10,4,12,10,'#0f0d0a');q(9,4,14,1,'#e6c451');
+    q(12,8,3,3,'#66e0ff');q(17,8,3,3,'#66e0ff');q(13,9,1,1,'#c9f5ff');q(18,9,1,1,'#c9f5ff');
+    q(13,12,6,1,'#171512');
+    q(7,3,4,12,'#dcc04e');q(21,3,4,12,'#dcc04e');q(7,3,4,1,'#efd66a');q(21,3,4,1,'#efd66a');
+    q(9,1,14,4,'#dcc04e');q(9,1,14,1,'#efd66a');q(14,0,4,2,'#2b3a6a');q(15,4,2,2,'#e8642c');
+    q(6,14,3,11,'#a07f26');q(23,14,3,11,'#a07f26');
+    q(27,1,2,27,'#7a5a2a');q(25,0,6,5,'#66e0ff');q(27,1,2,2,'#c9f5ff');});
   /* ---- NPCs (detailed animated humanoids) ---- */
   buildNpcSprites();
   /* ---- misc ---- */
@@ -1488,7 +1641,7 @@ function pickupDrop(d){
 function rollLoot(mob){
   const d=MOBS[mob.type];
   const out={gold:0,items:[]};
-  const rolls=d.boss?2:1;
+  const rolls=(d.boss||d.semi)?2:1; /* bosses + dungeon semi-bosses roll twice */
   for(let i=0;i<rolls;i++){
     const e=lootRoll(d.loot);
     if(e.gold)out.gold+=rand(e.gold[0],e.gold[1]);
@@ -1855,9 +2008,12 @@ function draw(){
       const r=it.o,d=RES[r.type];
       if(d.skill==='woodcutting'){
         const sway=r.alive?Math.sin(T/900+r.x*1.3)*0.8:0; /* gentle wind */
-        ctx.drawImage(r.alive?(r.type==='O'?SPR.oak:SPR.tree):SPR.stump,r.x*TILE+sway,r.y*TILE-(r.alive?16:0));
-      }else
-        ctx.drawImage(r.alive?(r.type==='I'?SPR.rock_i:SPR.rock_c):SPR.rubble,r.x*TILE,r.y*TILE);
+        const tspr=r.type==='O'?SPR.oak:r.type==='Y'?SPR.pine:SPR.tree;
+        ctx.drawImage(r.alive?tspr:SPR.stump,r.x*TILE+sway,r.y*TILE-(r.alive?16:0));
+      }else{
+        const rspr=r.type==='I'?SPR.rock_i:r.type==='Z'?SPR.crystal:SPR.rock_c;
+        ctx.drawImage(r.alive?rspr:SPR.rubble,r.x*TILE,r.y*TILE);
+      }
     }else if(it.k==='m'){
       const m=it.o,d=MOBS[m.type];
       const facing=m.moving&&m.moving.txx<m.tx?-1:1;
@@ -1875,7 +2031,12 @@ function draw(){
         ctx.fillStyle='#f0c419';ctx.fillText(d.name,m.px+16,m.py-44);
       }else{
         drawFlipped(SPR[m.type],mx,my,facing);
-        if(m.hp<d.hp){
+        if(d.semi){ /* elite: name bar + wider health bar */
+          ctx.fillStyle='#000000aa';ctx.fillRect(m.px+2,m.py-8,28,4);
+          ctx.fillStyle='#c9584a';ctx.fillRect(m.px+3,m.py-7,26*(m.hp/d.hp),2);
+          ctx.font='bold 8px monospace';ctx.textAlign='center';
+          ctx.fillStyle='#d9a5f0';ctx.fillText(d.name,m.px+16,m.py-11);
+        }else if(m.hp<d.hp){
           ctx.fillStyle='#000000aa';ctx.fillRect(m.px+6,m.py-6,20,4);
           ctx.fillStyle='#c9584a';ctx.fillRect(m.px+7,m.py-5,18*(m.hp/d.hp),2);
         }
@@ -1981,7 +2142,8 @@ function updateHUD(){
 
 /* ---------------- minimap (toggle open, redrawn while visible) ---------- */
 let minimapOn=false;
-const MM_GROUND={'.':'#4a6741',',':'#5a4a3a',';':'#565c58',':':'#465239'};
+const MM_GROUND={'.':'#4a6741',',':'#5a4a3a',';':'#565c58',':':'#465239',
+  's':'#dbe4ee','a':'#a89a4e','d':'#d8c489'};
 function toggleMinimap(){
   minimapOn=!minimapOn;
   $('minimap').classList.toggle('open',minimapOn);
@@ -1996,9 +2158,9 @@ function drawMinimap(){
   const gnd=MM_GROUND[MAPS[P.map].ground]||'#4a6741';
   for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
     const ch=W.grid[y][x];
-    g.fillStyle = ch==='~'?'#31504f' : (ch==='P'||ch==='E')?'#8a8578'
-      : ch==='B'?'#6f5340' : (ch==='Q'||ch==='H'||ch==='G')?'#c9a24a'
-      : MM_GROUND[ch]||(RES[ch]?gnd:'#33302a');
+    g.fillStyle = ch==='~'?'#31504f' : (ch==='P'||ch==='E'||ch==='D')?'#8a8578'
+      : ch==='B'||ch==='K'?'#6f5340' : (ch==='Q'||ch==='H'||ch==='G')?'#c9a24a'
+      : ch==='k'?'#3f7a3a' : MM_GROUND[ch]||(RES[ch]?gnd:'#33302a');
     g.fillRect(x*cell,y*cell,cell,cell);
   }
   for(const r of W.res){if(!r.alive)continue;

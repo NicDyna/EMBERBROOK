@@ -1,18 +1,27 @@
-/* p2: world data — resources, mobs (styles + loot tables), bosses,
-       NPCs, quests, dailies, the five maps, world builder, pathfinding */
+/* p2: world data — resources, biome mobs (styles + loot tables), dungeon
+       semi-bosses & bosses, NPCs, quests, dailies, the walled town + four
+       huge biome regions (Forest→Mountains→Plains→Desert) each with a
+       dungeon, procedural region builder, and pathfinding.
 
-/* ---------------- gatherable resources ---------------- */
+   World shape (single linear chain, town has ONE south gate):
+     Town → Forest → Mountains → Plains → Desert
+     each region holds a Dungeon (semi-boss + boss, the best loot). */
+
+/* ---------------- gatherable resources ----------------
+   Overworld gathering. Y/Z are the high-tier biome nodes (mountains/desert). */
 const RES={
   T:{name:'Tree',skill:'woodcutting',lvl:1,xp:12,item:'logs',time:2200,respawn:6000,hp:3},
   O:{name:'Oak',skill:'woodcutting',lvl:5,xp:26,item:'oak_logs',time:2800,respawn:9000,hp:4},
+  Y:{name:'Frostpine',skill:'woodcutting',lvl:15,xp:44,item:'oak_logs',time:3200,respawn:11000,hp:5},
   C:{name:'Copper Rock',skill:'mining',lvl:1,xp:14,item:'copper_ore',time:2400,respawn:7000,hp:3},
   I:{name:'Iron Rock',skill:'mining',lvl:8,xp:30,item:'iron_ore',time:3000,respawn:10000,hp:4},
+  Z:{name:'Crystal Vein',skill:'mining',lvl:18,xp:58,item:'gem',time:3600,respawn:15000,hp:5},
 };
 
 /* ---------------- loot table helpers ----------------
    entries: {w, gold:[min,max]} | {w, item, q:[min,max]}
           | {w, gear:{line?, tierMin, tierMax}}  (line omitted = random)
-   Boss tables get rarityBoost + a guaranteed roll. */
+   Boss/semi tables get rarityBoost + a second roll (see rollLoot in p5). */
 function lootRoll(table){
   const tot=table.reduce((a,e)=>a+e.w,0);
   let r=Math.random()*tot;
@@ -22,57 +31,101 @@ function lootRoll(table){
 
 /* ---------------- mobs ----------------
    style: 'melee'|'ranged'|'magic' (combat triangle:
-   melee beats ranged beats magic beats melee) */
+   melee beats ranged beats magic beats melee).
+   boss:true → big 2× sprite, ~5-min respawn. semi:true → elite (double loot
+   roll + rarity boost, faster respawn). Both live inside dungeons. */
 const MOBS={
-  goblin:{name:'Goblin',lvl:3,hp:12,style:'melee',acc:6,pow:4,def:3,spd:2600,range:1,
-    aggro:false,xp:22,gold:[3,9],
-    loot:[{w:50,gold:[3,9]},{w:18,item:'bone',q:[1,1]},{w:10,item:'bread',q:[1,1]},
-          {w:8,item:'arrows',q:[4,10]},{w:8,gear:{tierMin:1,tierMax:2}},{w:6,item:'cooked_meat',q:[1,1]}]},
-  wolf:{name:'Wolf',lvl:6,hp:20,style:'melee',acc:9,pow:6,def:5,spd:2200,range:1,
-    aggro:true,xp:34,gold:[0,0],
-    loot:[{w:46,item:'wolf_pelt',q:[1,1]},{w:22,item:'cooked_meat',q:[1,2]},
+  /* ===== Dense Forest — Whisperwood (lvl 3–12) ===== */
+  spider:{name:'Forest Spider',lvl:4,hp:14,style:'melee',acc:7,pow:4,def:3,spd:2400,range:1,
+    aggro:false,xp:24,gold:[2,7],
+    loot:[{w:48,gold:[2,7]},{w:20,item:'bone',q:[1,1]},{w:12,item:'bread',q:[1,1]},
+          {w:10,gear:{tierMin:1,tierMax:2}},{w:10,item:'cooked_meat',q:[1,1]}]},
+  boar:{name:'Wild Boar',lvl:6,hp:22,style:'melee',acc:9,pow:6,def:5,spd:2200,range:1,
+    aggro:true,xp:34,gold:[0,4],
+    loot:[{w:44,item:'wolf_pelt',q:[1,1]},{w:24,item:'cooked_meat',q:[1,2]},
           {w:20,item:'bone',q:[1,2]},{w:12,gear:{tierMin:1,tierMax:2}}]},
-  rat:{name:'Cave Rat',lvl:4,hp:16,style:'melee',acc:7,pow:5,def:4,spd:2400,range:1,
-    aggro:false,xp:26,gold:[2,6],
-    loot:[{w:52,gold:[2,6]},{w:22,item:'bone',q:[1,1]},{w:14,gear:{tierMin:1,tierMax:2}},
-          {w:12,item:'runes',q:[3,8]}]},
-  skeleton:{name:'Skeleton Archer',lvl:10,hp:26,style:'ranged',acc:12,pow:8,def:7,spd:2800,range:4,
-    aggro:true,xp:52,gold:[5,14],
-    loot:[{w:34,gold:[5,14]},{w:22,item:'arrows',q:[8,20]},{w:16,item:'bone',q:[1,3]},
-          {w:16,gear:{tierMin:2,tierMax:3}},{w:12,item:'iron_ore',q:[1,1]}]},
-  cultist:{name:'Cultist',lvl:16,hp:34,style:'magic',acc:16,pow:11,def:9,spd:2800,range:4,
-    aggro:true,xp:74,gold:[8,20],
-    loot:[{w:30,gold:[8,20]},{w:22,item:'runes',q:[6,16]},{w:18,item:'ancient_dust',q:[1,2]},
-          {w:18,gear:{tierMin:2,tierMax:4}},{w:12,item:'meat_pie',q:[1,1]}]},
-  gargoyle:{name:'Gargoyle',lvl:24,hp:52,style:'melee',acc:22,pow:15,def:16,spd:2600,range:1,
-    aggro:true,xp:120,gold:[12,30],
-    loot:[{w:30,gold:[12,30]},{w:22,item:'ancient_dust',q:[1,3]},{w:20,gear:{tierMin:3,tierMax:5}},
-          {w:16,item:'gem',q:[1,1]},{w:12,item:'iron_ore',q:[1,2]}]},
-  bogstalker:{name:'Bog Stalker',lvl:32,hp:66,style:'ranged',acc:28,pow:19,def:20,spd:2600,range:4,
-    aggro:true,xp:170,gold:[16,40],
-    loot:[{w:28,gold:[16,40]},{w:24,item:'swamp_herb',q:[1,3]},{w:20,gear:{tierMin:4,tierMax:5}},
-          {w:16,item:'arrows',q:[15,35]},{w:12,item:'stew',q:[1,1]}]},
-  hagspawn:{name:'Hag Spawn',lvl:38,hp:78,style:'magic',acc:34,pow:23,def:24,spd:2800,range:4,
-    aggro:true,xp:220,gold:[20,50],
-    loot:[{w:26,gold:[20,50]},{w:24,item:'runes',q:[12,28]},{w:20,gear:{tierMin:4,tierMax:6}},
-          {w:18,item:'swamp_herb',q:[2,4]},{w:12,item:'gem',q:[1,1]}]},
-  /* ------- zone bosses: big sprite, best loot, ~5 min respawn ------- */
-  goblin_king:{name:'Goblin King',lvl:12,hp:90,style:'melee',acc:16,pow:11,def:10,spd:2400,range:1,
-    aggro:true,xp:300,gold:[40,90],boss:true,respawn:300000,rarityBoost:2,
-    loot:[{w:40,gear:{tierMin:2,tierMax:3}},{w:30,gold:[40,90]},{w:18,item:'meat_pie',q:[1,2]},
+  bandit:{name:'Forest Bandit',lvl:9,hp:28,style:'ranged',acc:12,pow:7,def:6,spd:2800,range:4,
+    aggro:true,xp:46,gold:[6,16],
+    loot:[{w:34,gold:[6,16]},{w:22,item:'arrows',q:[6,14]},{w:16,item:'bread',q:[1,2]},
+          {w:16,gear:{tierMin:1,tierMax:2}},{w:12,item:'copper_ore',q:[1,1]}]},
+
+  /* ===== Frostpeak Mountains — snow (lvl 14–24) ===== */
+  frost_wolf:{name:'Frost Wolf',lvl:15,hp:40,style:'melee',acc:16,pow:11,def:10,spd:2100,range:1,
+    aggro:true,xp:72,gold:[4,12],
+    loot:[{w:40,item:'wolf_pelt',q:[1,2]},{w:24,item:'cooked_meat',q:[1,2]},
+          {w:18,item:'bone',q:[1,3]},{w:18,gear:{tierMin:2,tierMax:3}}]},
+  ice_sprite:{name:'Ice Sprite',lvl:18,hp:36,style:'magic',acc:19,pow:13,def:10,spd:2800,range:4,
+    aggro:true,xp:92,gold:[8,20],
+    loot:[{w:30,gold:[8,20]},{w:24,item:'runes',q:[6,16]},{w:18,item:'gem',q:[1,1]},
+          {w:18,gear:{tierMin:2,tierMax:4}},{w:10,item:'meat_pie',q:[1,1]}]},
+  snow_troll:{name:'Snow Troll',lvl:22,hp:68,style:'melee',acc:22,pow:15,def:18,spd:2800,range:1,
+    aggro:true,xp:130,gold:[10,26],
+    loot:[{w:30,gold:[10,26]},{w:22,item:'iron_ore',q:[1,2]},{w:20,gear:{tierMin:3,tierMax:4}},
+          {w:16,item:'bone',q:[2,4]},{w:12,item:'gem',q:[1,1]}]},
+
+  /* ===== Golden Plains — savanna (lvl 26–36) ===== */
+  steppe_lion:{name:'Steppe Lion',lvl:26,hp:74,style:'melee',acc:25,pow:16,def:16,spd:2200,range:1,
+    aggro:true,xp:150,gold:[12,30],
+    loot:[{w:34,item:'wolf_pelt',q:[1,3]},{w:24,item:'cooked_meat',q:[2,3]},
+          {w:20,gear:{tierMin:3,tierMax:4}},{w:12,item:'gem',q:[1,1]},{w:10,item:'meat_pie',q:[1,1]}]},
+  war_hawk:{name:'War Hawk',lvl:30,hp:58,style:'ranged',acc:28,pow:18,def:15,spd:2600,range:4,
+    aggro:true,xp:176,gold:[14,34],
+    loot:[{w:30,gold:[14,34]},{w:26,item:'arrows',q:[12,28]},{w:20,gear:{tierMin:3,tierMax:5}},
+          {w:14,item:'gem',q:[1,1]},{w:10,item:'stew',q:[1,1]}]},
+  nomad:{name:'Steppe Nomad',lvl:34,hp:82,style:'magic',acc:34,pow:22,def:22,spd:2800,range:4,
+    aggro:true,xp:212,gold:[18,44],
+    loot:[{w:28,gold:[18,44]},{w:24,item:'runes',q:[12,26]},{w:20,gear:{tierMin:4,tierMax:5}},
+          {w:16,item:'ancient_dust',q:[1,2]},{w:12,item:'gem',q:[1,2]}]},
+
+  /* ===== Ashen Desert — dunes (lvl 38–49) ===== */
+  scorpion:{name:'Sand Scorpion',lvl:38,hp:92,style:'melee',acc:36,pow:23,def:24,spd:2400,range:1,
+    aggro:true,xp:212,gold:[16,40],
+    loot:[{w:30,gold:[16,40]},{w:24,item:'gem',q:[1,2]},{w:20,gear:{tierMin:4,tierMax:5}},
+          {w:14,item:'bone',q:[2,4]},{w:12,item:'stew',q:[1,1]}]},
+  sand_wraith:{name:'Sand Wraith',lvl:42,hp:86,style:'magic',acc:40,pow:26,def:24,spd:2800,range:4,
+    aggro:true,xp:250,gold:[20,50],
+    loot:[{w:28,gold:[20,50]},{w:24,item:'runes',q:[14,30]},{w:20,item:'ancient_dust',q:[1,3]},
+          {w:18,gear:{tierMin:4,tierMax:6}},{w:10,item:'gem',q:[1,2]}]},
+  dune_raider:{name:'Dune Raider',lvl:45,hp:98,style:'ranged',acc:44,pow:28,def:26,spd:2600,range:4,
+    aggro:true,xp:280,gold:[24,56],
+    loot:[{w:28,gold:[24,56]},{w:24,item:'arrows',q:[18,40]},{w:20,gear:{tierMin:5,tierMax:6}},
+          {w:16,item:'gem',q:[1,2]},{w:12,item:'stew',q:[1,2]}]},
+
+  /* ===== Dungeon semi-bosses (elite: double loot + rarity boost) ===== */
+  spider_matron:{name:'Spider Matron',lvl:14,hp:70,style:'melee',acc:16,pow:11,def:10,spd:2500,range:1,
+    aggro:true,xp:150,gold:[15,35],semi:true,respawn:120000,rarityBoost:1,
+    loot:[{w:40,gear:{tierMin:2,tierMax:3}},{w:26,gold:[15,35]},{w:18,item:'gem',q:[1,1]},
+          {w:16,item:'meat_pie',q:[1,2]}]},
+  ice_warden:{name:'Ice Warden',lvl:28,hp:150,style:'magic',acc:30,pow:20,def:22,spd:2600,range:5,
+    aggro:true,xp:560,gold:[70,150],semi:true,respawn:120000,rarityBoost:2,
+    loot:[{w:42,gear:{tierMin:3,tierMax:4}},{w:26,gold:[70,150]},{w:18,item:'gem',q:[1,2]},
+          {w:14,item:'runes',q:[16,32]}]},
+  barrow_wight:{name:'Barrow Wight',lvl:38,hp:180,style:'magic',acc:36,pow:24,def:26,spd:2600,range:5,
+    aggro:true,xp:720,gold:[100,220],semi:true,respawn:120000,rarityBoost:2,
+    loot:[{w:42,gear:{tierMin:4,tierMax:5}},{w:24,gold:[100,220]},{w:18,item:'ancient_dust',q:[2,4]},
+          {w:16,item:'gem',q:[1,2]}]},
+  tomb_guardian:{name:'Tomb Guardian',lvl:46,hp:220,style:'melee',acc:46,pow:30,def:34,spd:2600,range:1,
+    aggro:true,xp:1000,gold:[160,340],semi:true,respawn:120000,rarityBoost:3,
+    loot:[{w:44,gear:{tierMin:5,tierMax:6}},{w:24,gold:[160,340]},{w:18,item:'gem',q:[2,3]},
+          {w:14,item:'ancient_dust',q:[3,5]}]},
+
+  /* ===== Dungeon bosses (big 2× sprite, ~5-min respawn, best loot) ===== */
+  bandit_king:{name:'The Bandit King',lvl:16,hp:120,style:'melee',acc:18,pow:12,def:12,spd:2400,range:1,
+    aggro:true,xp:360,gold:[50,110],boss:true,respawn:300000,rarityBoost:2,
+    loot:[{w:42,gear:{tierMin:2,tierMax:3}},{w:28,gold:[50,110]},{w:18,item:'meat_pie',q:[1,2]},
           {w:12,item:'gem',q:[1,1]}]},
-  rock_horror:{name:'Rock Horror',lvl:22,hp:150,style:'melee',acc:24,pow:16,def:20,spd:2800,range:1,
-    aggro:true,xp:520,gold:[70,150],boss:true,respawn:300000,rarityBoost:2,
-    loot:[{w:40,gear:{tierMin:3,tierMax:4}},{w:28,gold:[70,150]},{w:18,item:'gem',q:[1,2]},
+  frost_giant:{name:'The Frost Giant',lvl:32,hp:260,style:'melee',acc:26,pow:18,def:24,spd:2800,range:1,
+    aggro:true,xp:640,gold:[90,200],boss:true,respawn:300000,rarityBoost:2,
+    loot:[{w:42,gear:{tierMin:3,tierMax:5}},{w:26,gold:[90,200]},{w:18,item:'gem',q:[1,2]},
           {w:14,item:'iron_ore',q:[2,4]}]},
-  lich:{name:'Lich Ardun',lvl:36,hp:230,style:'magic',acc:38,pow:26,def:26,spd:2600,range:5,
-    aggro:true,xp:900,gold:[120,260],boss:true,respawn:300000,rarityBoost:3,
-    loot:[{w:42,gear:{tierMin:4,tierMax:6}},{w:26,gold:[120,260]},{w:18,item:'ancient_dust',q:[3,6]},
-          {w:14,item:'runes',q:[20,40]}]},
-  swamp_hag:{name:'The Swamp Hag',lvl:46,hp:320,style:'magic',acc:48,pow:32,def:34,spd:2600,range:5,
-    aggro:true,xp:1400,gold:[200,420],boss:true,respawn:300000,rarityBoost:3,
-    loot:[{w:44,gear:{tierMin:5,tierMax:6}},{w:24,gold:[200,420]},{w:18,item:'gem',q:[1,3]},
-          {w:14,item:'swamp_herb',q:[3,6]}]},
+  plains_warlord:{name:'The Plains Warlord',lvl:42,hp:300,style:'melee',acc:40,pow:26,def:30,spd:2400,range:1,
+    aggro:true,xp:900,gold:[140,300],boss:true,respawn:300000,rarityBoost:3,
+    loot:[{w:44,gear:{tierMin:4,tierMax:6}},{w:24,gold:[140,300]},{w:18,item:'gem',q:[2,3]},
+          {w:14,item:'ancient_dust',q:[2,4]}]},
+  sand_pharaoh:{name:'The Sand Pharaoh',lvl:50,hp:360,style:'magic',acc:50,pow:34,def:36,spd:2600,range:5,
+    aggro:true,xp:1600,gold:[240,480],boss:true,respawn:300000,rarityBoost:3,
+    loot:[{w:46,gear:{tierMin:5,tierMax:6}},{w:22,gold:[240,480]},{w:18,item:'gem',q:[2,4]},
+          {w:14,item:'ancient_dust',q:[4,7]}]},
 };
 
 /* ---------------- NPCs & dialogue ---------------- */
@@ -81,56 +134,54 @@ const NPCS={
   smith:{name:'Smith Torvald',role:'shop'},
   elder:{name:'Elder Rowan',role:'quests'},
   guard:{name:'Guard Bram',role:'chat',lines:["Stay on the roads, traveller.",
-    "The ruins north of the forest... nothing good comes from there.",
-    "They say the swamp hag hoards treasures beyond counting."]},
+    "The only way out is the south gate — mind what waits beyond.",
+    "Whisperwood, then the frozen peaks, the plains, and the deep desert. Few return.",
+    "The real treasures lie in the dungeons. So do the things that guard them."]},
   skillmaster:{name:'Master Aldric',role:'capes'},
 };
 
-/* ---------------- quests ---------------- */
+/* ---------------- quests (7, linear) ---------------- */
 const QUESTS={
   fresh:{name:'Fresh Timber',giver:'elder',desc:'Chop 3 logs for the town stockpile.',
     kind:'gather',item:['logs'],need:3,reward:{gold:30,xp:{woodcutting:40}}},
   ore:{name:'Copper for the Forge',giver:'smith',desc:'Mine 3 copper ore for Torvald.',
     kind:'gather',item:['copper_ore'],need:3,reward:{gold:35,xp:{mining:45}}},
-  goblins:{name:'Goblin Trouble',giver:'guard',desc:'Slay 4 goblins in Whisper Forest.',
-    kind:'kill',mob:['goblin'],need:4,reward:{gold:60,xp:{attack:40,strength:40}}},
-  iron:{name:'Iron Will',giver:'smith',desc:'Bring 2 iron ore from the deep mines.',
-    kind:'gather',item:['iron_ore'],need:2,reward:{gold:90,xp:{mining:90},gear:{id:'g_m_2_weapon',r:1}}},
-  bones:{name:'Restless Dead',giver:'elder',desc:'Destroy 3 skeletons in the mines.',
-    kind:'kill',mob:['skeleton'],need:3,reward:{gold:120,xp:{defence:80},gear:{id:'g_m_2_body',r:1}}},
-  lichbane:{name:'The Lich of the Ruins',giver:'elder',desc:'Defeat Lich Ardun in the Sunken Ruins.',
-    kind:'kill',mob:['lich'],need:1,reward:{gold:600,xp:{magic:300,defence:200}}},
-  hagsend:{name:"The Hag's End",giver:'elder',desc:'Slay the Swamp Hag and free the marsh.',
-    kind:'kill',mob:['swamp_hag'],need:1,reward:{gold:1500,xp:{attack:300,strength:300,ranged:300}}},
+  spiders:{name:'Along Came Spiders',giver:'guard',desc:'Slay 4 forest spiders in Whisperwood.',
+    kind:'kill',mob:['spider'],need:4,reward:{gold:60,xp:{attack:40,strength:40}}},
+  warren:{name:'The Bandit King',giver:'elder',desc:'Enter the Hollow Warren and defeat the Bandit King.',
+    kind:'kill',mob:['bandit_king'],need:1,reward:{gold:200,xp:{attack:120,defence:100},gear:{id:'g_m_3_body',r:1}}},
+  frost:{name:'Thaw the Deep',giver:'elder',desc:'Defeat the Frost Giant in the Glacial Cavern.',
+    kind:'kill',mob:['frost_giant'],need:1,reward:{gold:500,xp:{strength:260,defence:200}}},
+  barrow:{name:'Warlord of the Plains',giver:'elder',desc:'Defeat the Plains Warlord in the Sunken Barrow.',
+    kind:'kill',mob:['plains_warlord'],need:1,reward:{gold:900,xp:{ranged:300,magic:300}}},
+  pharaoh:{name:'The Sand Pharaoh',giver:'elder',desc:'Descend the Pharaoh\'s Tomb and end the Sand Pharaoh.',
+    kind:'kill',mob:['sand_pharaoh'],need:1,reward:{gold:2000,xp:{attack:350,strength:350,magic:350}}},
 };
-const QUEST_ORDER=['fresh','ore','goblins','iron','bones','lichbane','hagsend'];
+const QUEST_ORDER=['fresh','ore','spiders','warren','frost','barrow','pharaoh'];
 
 /* ---------------- daily task pool ---------------- */
 const DAILY_POOL=[
   {id:'d_logs',desc:'Chop 10 logs',kind:'gather',item:['logs','oak_logs'],need:10,gold:40},
   {id:'d_ore',desc:'Mine 8 ore',kind:'gather',item:['copper_ore','iron_ore'],need:8,gold:45},
   {id:'d_kill',desc:'Defeat 6 monsters',kind:'kill',mob:null,need:6,gold:50},
-  {id:'d_gob',desc:'Slay 4 goblins',kind:'kill',mob:['goblin'],need:4,gold:40},
+  {id:'d_spider',desc:'Slay 4 forest spiders',kind:'kill',mob:['spider'],need:4,gold:40},
   {id:'d_gold',desc:'Earn 150 gold',kind:'gold',need:150,gold:60},
-  {id:'d_skel',desc:'Destroy 3 skeletons',kind:'kill',mob:['skeleton'],need:3,gold:55},
+  {id:'d_frost',desc:'Destroy 3 frost wolves',kind:'kill',mob:['frost_wolf'],need:3,gold:60},
   {id:'d_ranged',desc:'Land 15 ranged or magic kills or hits',kind:'stylehit',need:15,gold:55},
-  {id:'d_boss',desc:'Defeat any zone boss',kind:'kill',mob:['goblin_king','rock_horror','lich','swamp_hag'],need:1,gold:120},
-  {id:'d_ruins',desc:'Defeat 5 monsters in the ruins',kind:'killmap',map:'ruins',need:5,gold:70},
-  {id:'d_swamp',desc:'Defeat 5 monsters in the swamp',kind:'killmap',map:'swamp',need:5,gold:90},
+  {id:'d_boss',desc:'Defeat any dungeon boss',kind:'kill',mob:['bandit_king','frost_giant','plains_warlord','sand_pharaoh'],need:1,gold:140},
+  {id:'d_mountains',desc:'Defeat 5 monsters in the mountains',kind:'killmap',map:'mountains',need:5,gold:75},
+  {id:'d_desert',desc:'Defeat 5 monsters in the desert',kind:'killmap',map:'desert',need:5,gold:110},
 ];
 
 /* ---------------- maps ----------------
-   Tiles: . grass  , cave floor  ; ruin floor  : swamp floor
-   X rock wall  # cave wall  F forest edge  U ruin wall  S swamp edge
-   R roof  W bank  P path  E exit marker  Q quest board  M monument
-   G gravestone-decor  A skillmaster porch  T/O/C/I resources  ~ water */
+   Tiles: . grass  s snow  a savanna  d desert sand  , dungeon floor  ~ water
+   K town wall  X rock/cliff  F forest edge  # dungeon wall  k cactus (blocked)
+   P path/road  E exit gate  D dungeon entrance  Q quest board  H monument
+   B building footprint  G grave decor  T/O/Y trees  C/I/Z ore/crystal
+   Town is generated by buildTownGrid; the four regions + four dungeons by
+   buildRegions — both run once at load so buildWorld sees finished grids. */
 const MAPS={
- /* Emberbrook — modelled on the old town of St. Vith: an egg-shaped ring wall
-    (wide + rounded to the north, tapering to a point at the south where the
-    Büchelturm stands), the Hauptstraße spine running N→S, and St-Vitus church
-    east of it. Grid + streets + gates are generated by buildTownGrid below;
-    'B' = building footprint (blocked, drawn as an oblique billboard in p6). */
- town:{name:'Emberbrook',ground:'.',w:40,h:36,spawn:[20,17],rows:[],
+ town:{name:'Emberbrook',ground:'.',w:40,h:36,spawn:[20,17],rows:[],gate:[20,33],
   buildings:[
    {x:9, y:4, w:3,d:3,type:'house_a'},
    {x:14,y:4, w:4,d:3,type:'house_c',label:'BÄCKEREI'},
@@ -145,136 +196,50 @@ const MAPS={
    {x:13,y:23,w:4,d:3,type:'house_b'},
    {x:24,y:23,w:4,d:3,type:'inn',   label:'HOTEL'},
    {x:30,y:23,w:3,d:3,type:'house_a'},
-   {x:19,y:29,w:3,d:3,type:'tower', label:'BÜCHELTURM'}],
+   {x:24,y:26,w:3,d:3,type:'tower', label:'BÜCHELTURM'}],
   npcs:[{id:'banker',x:9,y:12},{id:'smith',x:30,y:19},{id:'elder',x:14,y:20},
         {id:'skillmaster',x:25,y:14},{id:'guard',x:22,y:26}],
   mobs:[],exits:[],labels:[]},
- forest:{name:'Whisper Forest',ground:'.',rows:[
-  "FFFFFFFFFFFFFFFFFFFFFFFFFF",
-  "F..T....T.....T......TFEEF",
-  "F....................T...F",
-  "F..T.....T....FF....T....F",
-  "F.............FF.......O.F",
-  "F...T....T...............F",
-  "F........................F",
-  "F......T.............O...F",
-  "EPPPP....................F",
-  "EPPPP....................F",
-  "F........T...............F",
-  "F.............FF.......O.F",
-  "F...T....................F",
-  "F..........T.........O...F",
-  "F........................F",
-  "F....T.........T.........F",
-  "F........................F",
-  "FFFFFFFFFFFFFFFFFFFFFFFFFF"],
-  npcs:[],
-  mobs:[{t:'goblin',x:8,y:4},{t:'goblin',x:12,y:7},{t:'goblin',x:9,y:12},{t:'goblin',x:14,y:10},
-        {t:'goblin',x:16,y:5},{t:'wolf',x:20,y:11},{t:'wolf',x:22,y:13},{t:'wolf',x:19,y:3},
-        {t:'goblin_king',x:6,y:15}],
-  exits:[{x:0,y:8,map:'town',tx:34,ty:14},{x:0,y:9,map:'town',tx:34,ty:15},
-         {x:23,y:1,map:'ruins',tx:2,ty:15},{x:24,y:1,map:'ruins',tx:3,ty:15}],labels:[]},
- mines:{name:'Old Copper Mines',ground:',',rows:[
-  "###########MM###########",
-  "#,,,,,,,,,,,,,,,,,,,,,,#",
-  "#,,C,,,,,,,,,,,,,C,,,,,#",
-  "#,,,,,,,,#####,,,,,,,,,#",
-  "#,C,,,,,,#,,,,,,,,C,,,,#",
-  "#,,,,,,,,#,,,,,,,,,,,,,#",
-  "#,,,,C,,,#,,,,,,C,,,,,,#",
-  "#,,,,,,,,,,,,,,,,,,,,,,#",
-  "#,,,,####,,,,,,####,,,,#",
-  "#,,,,,,,,,,,,,,,,,,,,,,#",
-  "#,I,,,,,,,,,,,,,,,,,I,,#",
-  "#,,,,,,,,,,I,,,,,,,,,,,#",
-  "#,,,,,,,,,,,,,,,,,,,,,,#",
-  "#,,,I,,,,,,,,,,,,,I,,,,#",
-  "#,,,,,,,,,,,,,,,,,,,,,,E",
-  "#######################E"],
-  npcs:[],
-  mobs:[{t:'rat',x:6,y:3},{t:'rat',x:15,y:5},{t:'rat',x:3,y:7},
-        {t:'skeleton',x:8,y:11},{t:'skeleton',x:15,y:12},{t:'skeleton',x:20,y:13},
-        {t:'rock_horror',x:2,y:12}],
-  exits:[{x:11,y:0,map:'town',tx:19,ty:26},{x:12,y:0,map:'town',tx:20,ty:26},
-         {x:23,y:14,map:'swamp',tx:1,ty:2},{x:23,y:15,map:'swamp',tx:1,ty:2}],labels:[]},
- ruins:{name:'Sunken Ruins',ground:';',rows:[
-  "UUUUUUUUUUUUUUUUUUUUUUUU",
-  "U;;;;;;;U;;;;;;;;U;;;;;U",
-  "U;;G;;;;;;;;~~;;;;;;G;;U",
-  "U;;;;;;U;;;;~~;;;U;;;;;U",
-  "U;;;;;;U;;;;;;;;;U;;;;;U",
-  "U;G;;;;;;;;;;;;;;;;;;G;U",
-  "U;;;;;;;;;UUUU;;;;;;;;;U",
-  "U;;;;;;;;;U;;;;;;;;;;;;U",
-  "U;;~~;;;;;U;;;;;;;~~;;;U",
-  "U;;~~;;;;;;;;;;;;;~~;;;U",
-  "U;;;;;;;;;;;;;;;;;;;;;;U",
-  "U;G;;;;;;;;;;;;;;;;;G;;U",
-  "U;;;;;;;;UU;;UU;;;;;;;;U",
-  "U;;;;;;;;U;;;;U;;;;;;;;U",
-  "U;;;;;;;;;;;;;;;;;;;;;;U",
-  "U;EE;;;;;;;;;;;;;;;;;;;U",
-  "UUUUUUUUUUUUUUUUUUUUUUUU"],
-  npcs:[],
-  mobs:[{t:'cultist',x:6,y:4},{t:'cultist',x:16,y:3},{t:'cultist',x:4,y:10},{t:'cultist',x:20,y:10},
-        {t:'gargoyle',x:12,y:8},{t:'gargoyle',x:18,y:13},{t:'gargoyle',x:6,y:14},
-        {t:'lich',x:12,y:13}],
-  exits:[{x:2,y:15,map:'forest',tx:23,ty:2},{x:3,y:15,map:'forest',tx:24,ty:2}],labels:[]},
- swamp:{name:'Mirefen Swamp',ground:':',rows:[
-  "SSSSSSSSSSSSSSSSSSSSSSSS",
-  "S::::::~~::::::::::::::S",
-  "E::::::~~::::::~~~:::::S",
-  "E:::::::::::::::~~:::::S",
-  "S:::T::::::::::::::::T:S",
-  "S::::::::~~~:::::::::::S",
-  "S:::::::~~~~:::::::::::S",
-  "S::::::::~~::::::::::::S",
-  "S:T::::::::::::::~~::::S",
-  "S::::::::::::::::~~::::S",
-  "S:::::~~:::::::::::::::S",
-  "S:::::~~::::T::::::::::S",
-  "S::::::::::::::::::::::S",
-  "S:::::::::~~~::::::::::S",
-  "S:T::::::::~~::::::::::S",
-  "S::::::::::::::::::::::S",
-  "SSSSSSSSSSSSSSSSSSSSSSSS"],
-  npcs:[],
-  mobs:[{t:'bogstalker',x:6,y:3},{t:'bogstalker',x:14,y:6},{t:'bogstalker',x:5,y:12},
-        {t:'hagspawn',x:18,y:4},{t:'hagspawn',x:12,y:10},{t:'hagspawn',x:19,y:13},
-        {t:'swamp_hag',x:20,y:8}],
-  exits:[{x:0,y:2,map:'mines',tx:22,ty:14},{x:0,y:3,map:'mines',tx:22,ty:14}],labels:[]},
+ forest:{name:'Whisperwood',ground:'.',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
+ mountains:{name:'Frostpeak Mountains',ground:'s',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
+ plains:{name:'Golden Plains',ground:'a',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
+ desert:{name:'Ashen Desert',ground:'d',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
+ forest_dungeon:{name:'Hollow Warren',ground:',',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
+ mountains_dungeon:{name:'Glacial Cavern',ground:',',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
+ plains_dungeon:{name:'Sunken Barrow',ground:',',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
+ desert_dungeon:{name:"Pharaoh's Tomb",ground:',',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
 };
-const BLOCKED=new Set(['X','R','W','F','#','Q','U','S','~','H','B']);
+const BLOCKED=new Set(['X','R','W','F','#','Q','U','S','~','H','B','K','k']);
 
-/* ---- generate the St. Vith town grid: egg-shaped ring wall + streets ----
-   Interior is walkable grass; the ring + Hauptstraße + cross-lanes are 'P';
-   building footprints are 'B'. Gates are punched where the ring meets the
-   forest (east) and mines (south-west), and the matching return targets in
-   forest/mines are wired up here. Runs once at load so buildWorld sees it. */
+/* ---- generate the St. Vith town grid: egg-shaped stone wall + one south gate
+   Interior is walkable grass/road; the egg ring is now a solid WALL 'K'
+   (blocking). The Hauptstraße spine runs down to a single southern gate 'E'
+   that leads to Whisperwood; all other gates are gone. 'B' = building. ---- */
 (function buildTownGrid(){
   const t=MAPS.town,W=t.w,H=t.h;
   const g=Array.from({length:H},()=>new Array(W).fill('.'));
   const set=(x,y,c)=>{if(x>=0&&x<W&&y>=0&&y<H)g[y][x]=c;};
-  const road=(x,y)=>{if(x>=0&&x<W&&y>=0&&y<H&&g[y][x]==='.')g[y][x]='P';};
+  const wall=(x,y)=>{if(x>=0&&x<W&&y>=0&&y<H&&g[y][x]==='.')g[y][x]='K';};
+  const road=(x,y)=>{if(x>=0&&x<W&&y>=0&&y<H&&(g[y][x]==='.'))g[y][x]='P';};
   const vl=(x,y0,y1)=>{for(let y=y0;y<=y1;y++)road(x,y);};
   const hl=(x0,x1,y)=>{for(let x=x0;x<=x1;x++)road(x,y);};
   const rect=(x,y,w,d,c)=>{for(let j=0;j<d;j++)for(let i=0;i<w;i++)set(x+i,y+j,c);};
-  /* egg-shaped ring wall: wide rounded north, tapering to a southern point */
+  /* egg-shaped stone wall: wide rounded north, tapering to a southern point */
   const cx=20,cyc=16,ryc=17,rx=16,yTop=2,yBot=33,L=[],Rr=[];
   for(let y=yTop;y<=yBot;y++){
     const tt=(y-cyc)/ryc,base=Math.sqrt(Math.max(0,1-tt*tt)),taper=tt>0?1-0.5*tt:1;
     const hw=rx*base*taper;L[y]=Math.round(cx-hw);Rr[y]=Math.round(cx+hw);
   }
   for(let y=yTop;y<=yBot;y++){
-    road(L[y],y);road(Rr[y],y);
+    wall(L[y],y);wall(Rr[y],y);
     if(y>yTop){ /* staircase-fill so the wall stays one closed loop */
-      for(let x=Math.min(L[y],L[y-1]);x<=Math.max(L[y],L[y-1]);x++)road(x,y);
-      for(let x=Math.min(Rr[y],Rr[y-1]);x<=Math.max(Rr[y],Rr[y-1]);x++)road(x,y);
+      for(let x=Math.min(L[y],L[y-1]);x<=Math.max(L[y],L[y-1]);x++)wall(x,y);
+      for(let x=Math.min(Rr[y],Rr[y-1]);x<=Math.max(Rr[y],Rr[y-1]);x++)wall(x,y);
     }
   }
-  for(let x=L[yTop];x<=Rr[yTop];x++)road(x,yTop); /* rounded northern cap */
-  /* Hauptstraße spine + named cross-lanes + Orts-/Kirchstraße side lanes */
-  vl(19,6,28);vl(20,6,28);
+  for(let x=L[yTop];x<=Rr[yTop];x++)wall(x,yTop); /* rounded northern cap */
+  /* Hauptstraße spine (down to the gate) + named cross-lanes + side lanes */
+  vl(19,6,31);vl(20,6,32);
   const cross=y=>hl(L[y]+1,Rr[y]-1,y);cross(8);cross(15);cross(22);
   vl(12,9,24);vl(28,9,22);
   /* buildings, then square furniture, churchyard graves, the Teich pond, greens */
@@ -283,20 +248,109 @@ const BLOCKED=new Set(['X','R','W','F','#','Q','U','S','~','H','B']);
   rect(32,13,2,2,'~');
   set(15,26,'T');set(17,27,'O');set(26,26,'T');
   for(const[x,y]of[[2,9],[3,22],[36,10],[37,25],[6,34],[34,34],[2,28],[10,33]])set(x,y,'T');
-  /* gates: east → forest, south-west → mines (the ring tile is the arrival) */
-  const gE1=Rr[13],gE2=Rr[14],gW1=L[24],gW2=L[25];
-  set(gE1+1,13,'E');set(gE2+1,14,'E');set(gW1-1,24,'E');set(gW2-1,25,'E');
-  t.exits=[{x:gE1+1,y:13,map:'forest',tx:1,ty:8},{x:gE2+1,y:14,map:'forest',tx:1,ty:9},
-           {x:gW1-1,y:24,map:'mines',tx:11,ty:1},{x:gW2-1,y:25,map:'mines',tx:12,ty:1}];
-  MAPS.forest.exits[0].tx=gE1;MAPS.forest.exits[0].ty=13;
-  MAPS.forest.exits[1].tx=gE2;MAPS.forest.exits[1].ty=14;
-  MAPS.mines.exits[0].tx=gW1;MAPS.mines.exits[0].ty=24;
-  MAPS.mines.exits[1].tx=gW2;MAPS.mines.exits[1].ty=25;
+  /* the single southern gate (egg tip ≈ x20,y33) → Whisperwood */
+  const gx=t.gate[0],gy=t.gate[1];
+  set(gx,gy,'E');set(gx,gy-1,'P');
+  t.exits=[{x:gx,y:gy,map:'forest',tx:30,ty:1}];
   /* street + landmark labels (rendered above the town in p6) */
   t.labels=[{x:20,y:6.4,t:'HAUPTSTR.'},{x:cx,y:8.4,t:'BLEICHSTR.'},{x:28,y:11.4,t:'KIRCHSTR.'},
-    {x:17,y:16.4,t:'MARKT'},{x:9,y:24.4,t:'PRÜMER TOR'},{x:36,y:13.4,t:'OSTTOR'},
+    {x:17,y:16.4,t:'MARKT'},{x:20,y:31.4,t:'SÜDTOR'},
     ...t.buildings.filter(b=>b.label).map(b=>({x:b.x+b.w/2,y:b.y+b.d-0.7,t:b.label}))];
   t.rows=g.map(r=>r.join(''));
+})();
+
+/* ---- generate the four huge biome regions + their dungeons ----------------
+   60×45 open fields bordered by blocking biome edges; sparse scattered
+   resources & decor (isolated tiles never disconnect the field); a north gate
+   back to the previous area, a south gate onward, and one dungeon mouth 'D'.
+   A dedicated seeded RNG keeps generation OFF Math.random so the gameplay/loot
+   stream (and the balance tests) stay identical run to run. */
+(function buildRegions(){
+  const RW=60,RH=45,RCx=30,DGx=14,DGy=14; /* region size, gate col, dungeon mouth */
+  function mkRng(seed){let s=seed>>>0;return()=>{s=(s+0x6D2B79F5)>>>0;
+    let x=Math.imul(s^s>>>15,1|s);x=(x+Math.imul(x^x>>>7,61|x))^x;return((x^x>>>14)>>>0)/4294967296;};}
+  const SPECS=[
+   {id:'forest',ground:'.',edge:'F',north:'town',south:'mountains',dungeon:'forest_dungeon',
+    res:[['T',34],['O',12],['C',8]],decor:[['X',6]],water:2,
+    mobs:{spider:9,boar:6,bandit:5}},
+   {id:'mountains',ground:'s',edge:'X',north:'forest',south:'plains',dungeon:'mountains_dungeon',
+    res:[['Y',20],['I',10],['Z',6]],decor:[['X',34]],water:0,
+    mobs:{frost_wolf:8,ice_sprite:6,snow_troll:5}},
+   {id:'plains',ground:'a',edge:'X',north:'mountains',south:'desert',dungeon:'plains_dungeon',
+    res:[['T',14],['I',8]],decor:[['X',10]],water:3,
+    mobs:{steppe_lion:8,war_hawk:6,nomad:5}},
+   {id:'desert',ground:'d',edge:'X',north:'plains',south:null,dungeon:'desert_dungeon',
+    res:[['Z',9]],decor:[['k',18],['X',12]],water:2,
+    mobs:{scorpion:8,sand_wraith:6,dune_raider:5}},
+  ];
+  const DUNG={
+   forest_dungeon:{adds:['spider','spider','bandit'],semi:'spider_matron',boss:'bandit_king'},
+   mountains_dungeon:{adds:['frost_wolf','ice_sprite','snow_troll'],semi:'ice_warden',boss:'frost_giant'},
+   plains_dungeon:{adds:['steppe_lion','war_hawk','nomad'],semi:'barrow_wight',boss:'plains_warlord'},
+   desert_dungeon:{adds:['scorpion','sand_wraith','dune_raider'],semi:'tomb_guardian',boss:'sand_pharaoh'},
+  };
+  const townGate=MAPS.town.gate;
+
+  function buildRegion(spec,seed){
+    const g=Array.from({length:RH},()=>new Array(RW).fill(spec.ground));
+    const rng=mkRng(seed),mobs=[];
+    const key=(x,y)=>x+','+y, reserved=new Set();
+    const reserve=(x,y,r)=>{for(let j=-r;j<=r;j++)for(let i=-r;i<=r;i++)reserved.add(key(x+i,y+j));};
+    /* solid biome border */
+    for(let x=0;x<RW;x++){g[0][x]=spec.edge;g[RH-1][x]=spec.edge;}
+    for(let y=0;y<RH;y++){g[y][0]=spec.edge;g[y][RW-1]=spec.edge;}
+    /* reserve gates, dungeon mouth + a clear central corridor */
+    reserve(RCx,1,2);reserve(RCx,RH-2,2);reserve(DGx,DGy,2);
+    for(let y=1;y<RH-1;y++)reserved.add(key(RCx,y));
+    const openTile=()=>{ /* random interior ground tile, not reserved */
+      for(let tries=0;tries<40;tries++){
+        const x=1+Math.floor(rng()*(RW-2)),y=1+Math.floor(rng()*(RH-2));
+        if(g[y][x]===spec.ground&&!reserved.has(key(x,y)))return[x,y];
+      }return null;};
+    /* water pools (small, blocking via '~') */
+    for(let i=0;i<spec.water;i++){const p=openTile();if(!p)continue;
+      for(let j=0;j<2;j++)for(let k=0;k<2;k++)if(g[p[1]+j]&&g[p[1]+j][p[0]+k]===spec.ground)g[p[1]+j][p[0]+k]='~';}
+    /* decor (blocking) then resources */
+    for(const[ch,n]of spec.decor)for(let i=0;i<n;i++){const p=openTile();if(p)g[p[1]][p[0]]=ch;}
+    for(const[ch,n]of spec.res)for(let i=0;i<n;i++){const p=openTile();if(p){g[p[1]][p[0]]=ch;reserved.add(key(p[0],p[1]));}}
+    /* mobs on open ground */
+    for(const t in spec.mobs)for(let i=0;i<spec.mobs[t];i++){const p=openTile();if(p){mobs.push({t,x:p[0],y:p[1]});reserved.add(key(p[0],p[1]));}}
+    /* gates + dungeon mouth (force-clear their tiles + approaches) */
+    g[0][RCx]='E';g[1][RCx]=spec.ground;
+    const exits=[];
+    const northArr = spec.north==='town' ? [townGate[0],townGate[1]-1] : [RCx,RH-2];
+    exits.push({x:RCx,y:0,map:spec.north,tx:northArr[0],ty:northArr[1]});
+    if(spec.south){g[RH-1][RCx]='E';g[RH-2][RCx]=spec.ground;
+      exits.push({x:RCx,y:RH-1,map:spec.south,tx:RCx,ty:1});}
+    g[DGy][DGx]='D';g[DGy+1][DGx]=spec.ground;
+    exits.push({x:DGx,y:DGy,map:spec.dungeon,tx:12,ty:15});
+    return{rows:g.map(r=>r.join('')),mobs,exits};
+  }
+
+  function buildDungeon(id,rid,seed){
+    const W=24,H=18,d=DUNG[id],rng=mkRng(seed),mobs=[];
+    const g=Array.from({length:H},()=>new Array(W).fill('#'));
+    for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++)g[y][x]=',';
+    /* a few rubble pillars for texture (kept off the central aisle) */
+    for(let i=0;i<10;i++){const x=2+Math.floor(rng()*(W-4)),y=2+Math.floor(rng()*(H-6));
+      if(Math.abs(x-12)>2)g[y][x]='X';}
+    /* back-exit to the region, spawn just inside */
+    g[H-1][12]='E';g[H-2][12]=',';g[H-3][12]=',';
+    mobs.push({t:d.boss,x:12,y:3});
+    mobs.push({t:d.semi,x:12,y:8});
+    d.adds.forEach((t,i)=>mobs.push({t,x:6+i*5,y:11}));
+    /* clear tiles under every entity so nothing spawns in a pillar */
+    for(const m of mobs){g[m.y][m.x]=',';}
+    const exits=[{x:12,y:H-1,map:rid,tx:DGx,ty:DGy+1}];
+    return{rows:g.map(r=>r.join('')),mobs,exits,ground:','};
+  }
+
+  SPECS.forEach((spec,i)=>{
+    const r=buildRegion(spec,0x51ed+i*0x1000);
+    MAPS[spec.id].rows=r.rows;MAPS[spec.id].mobs=r.mobs;MAPS[spec.id].exits=r.exits;
+    const dg=buildDungeon(spec.dungeon,spec.id,0x9a1c+i*0x1000);
+    MAPS[spec.dungeon].rows=dg.rows;MAPS[spec.dungeon].mobs=dg.mobs;MAPS[spec.dungeon].exits=dg.exits;
+  });
 })();
 
 /* ---------------- runtime world ---------------- */

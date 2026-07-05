@@ -51,21 +51,21 @@ setTimeout(()=>{
     for(const e of EB.MAPS[mid].exits){
       const reach=[[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy])=>{
         const c=EB.world[mid].grid[e.y+dy]&&EB.world[mid].grid[e.y+dy][e.x+dx];
-        return c!==undefined&&!['X','R','W','F','#','Q','U','S','~','H','B'].includes(c);
+        return c!==undefined&&!['X','R','W','F','#','Q','U','S','~','H','B','K','k'].includes(c);
       });
       if(!reach){mapOk=false;console.log('  exit unreachable',mid,e.x,e.y);}
       // target walkable in destination
       const g=EB.world[e.map].grid[e.ty]&&EB.world[e.map].grid[e.ty][e.tx];
-      const tgtOk=g!==undefined&&!['X','R','W','F','#','Q','U','S','~','H','B'].includes(g)&&!EB.world[e.map].res.find(r=>r.x===e.tx&&r.y===e.ty);
+      const tgtOk=g!==undefined&&!['X','R','W','F','#','Q','U','S','~','H','B','K','k'].includes(g)&&!EB.world[e.map].res.find(r=>r.x===e.tx&&r.y===e.ty);
       if(!tgtOk){mapOk=false;console.log('  exit target blocked',mid,'->',e.map,e.tx,e.ty,'tile='+g);}
     }
     for(const m of EB.world[mid].mobs){
       const g=EB.world[mid].grid[m.hy][m.hx];
-      if(['X','R','W','F','#','Q','U','S','~','H','B'].includes(g)){mapOk=false;console.log('  mob spawn blocked',mid,m.type,m.hx,m.hy);}
+      if(['X','R','W','F','#','Q','U','S','~','H','B','K','k'].includes(g)){mapOk=false;console.log('  mob spawn blocked',mid,m.type,m.hx,m.hy);}
     }
     for(const n of EB.world[mid].npcs){
       const g=EB.world[mid].grid[n.y][n.x];
-      if(['X','R','W','F','#','Q','U','S','~','H','B'].includes(g)){mapOk=false;console.log('  npc blocked',mid,n.id);}
+      if(['X','R','W','F','#','Q','U','S','~','H','B','K','k'].includes(g)){mapOk=false;console.log('  npc blocked',mid,n.id);}
     }
   }
   ok(mapOk,'all 5 maps: exits reachable, targets + spawns walkable');
@@ -79,16 +79,20 @@ setTimeout(()=>{
   ok(mig.gold===77&&mig.bank.bone===2&&mig.quests.fresh==='done','migration kept gold/bank/quests');
 
   /* ---------- gathering + woodcutting ---------- */
-  tp('forest',1,8);
+  tp('forest',30,10);
   const tree=EB.world.forest.res.find(r=>r.type==='T'&&r.alive);
-  EB.setGather(tree);tick(20000);
+  EB.setGather(tree);tick(24000);
   ok(EB.invCount('logs')>0,'chopped logs: '+EB.invCount('logs'));
   ok(EB.P.xp.woodcutting>0,'woodcutting xp: '+EB.P.xp.woodcutting);
 
   /* ---------- melee trinity: styles route xp ---------- */
-  const gob=EB.world.forest.mobs.find(m=>m.type==='goblin'&&m.alive);
-  tp('forest',gob.hx,gob.hy+1);
-  EB.P.xp.strength=w.eval('xpAt(12)');EB.P.hp=EB.maxHp();
+  EB.world.forest.mobs.forEach(m=>{m.aggro=false;m.wanderT=1e12;}); // calm the woods
+  EB.P.xp.strength=w.eval('xpAt(12)');EB.P.xp.defence=w.eval('xpAt(20)');
+  EB.addGear({id:'g_m_3_body',r:1});EB.equipGear(EB.P.inv.findIndex(s=>s.gear&&s.gear.id==='g_m_3_body'));
+  EB.addGear({id:'g_m_3_legs',r:1});EB.equipGear(EB.P.inv.findIndex(s=>s.gear&&s.gear.id==='g_m_3_legs'));
+  const gob=EB.world.forest.mobs.find(m=>m.type==='spider'&&m.alive);
+  gob.tx=30;gob.ty=20;gob.px=30*32;gob.py=20*32;gob.hp=EB.MOBS.spider.hp;gob.alive=true;gob.moving=null;
+  tp('forest',30,21);EB.P.hp=EB.maxHp();
   EB.P.style='aggressive';
   EB.setFight(gob);tick(30000);
   const strB=w.eval('xpAt(12)');ok(EB.P.xp.strength>strB&&EB.P.xp.attack===0,'aggressive style trained Strength only (+'+(EB.P.xp.strength-strB)+' xp)');
@@ -114,11 +118,11 @@ setTimeout(()=>{
   EB.addGear({id:'g_m_3_body',r:1});EB.equipGear(EB.P.inv.findIndex(s=>s.gear&&s.gear.id==='g_m_3_body'));
   EB.addGear({id:'g_m_3_legs',r:1});EB.equipGear(EB.P.inv.findIndex(s=>s.gear&&s.gear.id==='g_m_3_legs'));
   EB.P.hp=EB.maxHp();
-  const gob2=EB.world.forest.mobs.find(m=>m.hx===8&&m.hy===4); // far from wolves
-  gob2.alive=true;gob2.hp=99;gob2.tx=gob2.hx;gob2.ty=gob2.hy;gob2.px=gob2.tx*32;gob2.py=gob2.ty*32;gob2.aggro=false;gob2.moving=null;
   EB.world.forest.mobs.forEach(m=>{m.aggro=false;m.wanderT=1e12;}); // freeze wander for determinism
-  ok(gob2,'test goblin staged');
-  tp('forest',gob2.tx+3,gob2.ty); // in bow range (4), out of melee
+  const gob2=EB.world.forest.mobs.find(m=>m.type==='spider'&&m.alive);
+  gob2.alive=true;gob2.hp=99;gob2.tx=30;gob2.ty=17;gob2.px=30*32;gob2.py=17*32;gob2.aggro=false;gob2.moving=null;
+  ok(gob2,'test spider staged');
+  tp('forest',30,20); // 3 tiles apart: in bow range (4), out of melee
   const arrowsBefore=EB.invCount('arrows');
   const holdX=EB.P.tx,holdY=EB.P.ty,deathsB=EB.P.stats.deaths;
   EB.setFight(gob2);tick(6000);
@@ -130,8 +134,9 @@ setTimeout(()=>{
 
   /* ---------- out-of-ammo stops attack ---------- */
   EB.P.inv=EB.P.inv.filter(s=>s.id!=='arrows');
-  const gob3=EB.world.forest.mobs.find(m=>m.type==='goblin'&&m.alive);
-  if(gob3){tp('forest',gob3.tx+2,gob3.ty);EB.setFight(gob3);tick(3000);
+  const gob3=EB.world.forest.mobs.find(m=>m.type==='spider'&&m.alive&&m!==gob2);
+  if(gob3){gob3.tx=30;gob3.ty=10;gob3.px=30*32;gob3.py=10*32;gob3.hp=99;gob3.moving=null;
+    tp('forest',30,12);EB.setFight(gob3);tick(4000);
     ok(EB.P.action===null,'attack halted when out of arrows');}
 
   /* ---------- combat triangle math ---------- */
@@ -170,37 +175,37 @@ setTimeout(()=>{
 
   /* ---------- death -> gravestone -> recovery ---------- */
   EB.P.inv=[];EB.addItem('logs',5);EB.P.gold=123;
-  tp('mines',5,5);
+  tp('mountains',30,20);
   EB.hurtPlayer(9999);
   ok(EB.P.map==='town'&&EB.P.hp===EB.maxHp(),'respawned in town at full hp');
   ok(EB.P.gold===0&&EB.P.inv.length===0,'carried gold+items dropped');
   ok(EB.P.gear.body,'equipped gear kept on death');
-  const grave=EB.world.mines.drops.find(d=>d.grave);
+  const grave=EB.world.mountains.drops.find(d=>d.grave);
   ok(grave&&grave.gold===123&&grave.left>0,'gravestone holds loot, timer '+(grave&&grave.left)+'ms');
-  tp('mines',grave.x,grave.y);
+  tp('mountains',grave.x,grave.y);
   EB.pickupDrop(grave);
   ok(EB.P.gold===123&&EB.invCount('logs')===5,'recovered gravestone loot');
   ok(EB.P.grave===null,'grave cleared after recovery');
 
   /* ---------- grave crumbles after 2 min ---------- */
   EB.P.inv=[];EB.addItem('bone',1);EB.P.gold=1;
-  tp('mines',5,5);EB.hurtPlayer(9999);
-  const g2=EB.world.mines.drops.find(d=>d.grave);
+  tp('mountains',30,22);EB.hurtPlayer(9999);
+  const g2=EB.world.mountains.drops.find(d=>d.grave);
   ok(g2,'second gravestone created');
   tick(121000);
-  ok(!EB.world.mines.drops.find(d=>d.grave),'gravestone crumbled after 2 in-game minutes');
+  ok(!EB.world.mountains.drops.find(d=>d.grave),'gravestone crumbled after 2 in-game minutes');
 
-  /* ---------- boss: kill + respawn timer + boosted loot ---------- */
-  const boss=EB.world.forest.mobs.find(m=>m.type==='goblin_king');
+  /* ---------- boss: kill + respawn timer + boosted loot (dungeon) ---------- */
+  const boss=EB.world.forest_dungeon.mobs.find(m=>m.type==='bandit_king');
   boss.alive=true;boss.hp=1;
-  tp('forest',boss.tx+1,boss.ty);
+  tp('forest_dungeon',boss.tx,boss.ty+1);
   EB.P.inv=[];EB.P.xp.attack=w.eval('xpAt(30)');EB.P.style='accurate';
   EB.addGear({id:'g_m_1_weapon',r:0});EB.equipGear(0);
   EB.setFight(boss);tick(15000);
   ok(!boss.alive,'boss killed');
-  ok(EB.P.stats.bossKills.goblin_king>=1,'boss kill recorded in trophies');
+  ok(EB.P.stats.bossKills.bandit_king>=1,'boss kill recorded in trophies');
   ok(boss.respawnAt-w.EB.T>=200000,'boss respawn ~5 min: '+(boss.respawnAt-EB.T)+'ms');
-  ok(EB.world.forest.drops.length>0,'boss dropped loot on ground');
+  ok(EB.world.forest_dungeon.drops.length>0,'boss dropped loot on ground');
 
   /* ---------- capes ---------- */
   EB.P.gold=30000;EB.P.xp.woodcutting=w.eval('xpAt(50)');

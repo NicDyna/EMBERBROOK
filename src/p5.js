@@ -185,7 +185,7 @@ function pickupDrop(d){
 function rollLoot(mob){
   const d=MOBS[mob.type];
   const out={gold:0,items:[]};
-  const rolls=d.boss?2:1;
+  const rolls=(d.boss||d.semi)?2:1; /* bosses + dungeon semi-bosses roll twice */
   for(let i=0;i<rolls;i++){
     const e=lootRoll(d.loot);
     if(e.gold)out.gold+=rand(e.gold[0],e.gold[1]);

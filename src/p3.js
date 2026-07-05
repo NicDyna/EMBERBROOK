@@ -66,6 +66,10 @@ function applySave(d){
   P.stats={...fp.stats,...(d.stats||{})};
   if(d.worldDrops)for(const m in d.worldDrops){if(world[m])world[m].drops=d.worldDrops[m];}
   delete P.worldDrops;
+  /* migrate stale saves: a map that no longer exists (old Mines/Ruins/Swamp)
+     would crash the renderer — send the hero home to town instead. */
+  if(!MAPS[P.map]){const s=MAPS.town.spawn;P.map='town';P.tx=s[0];P.ty=s[1];P.px=P.tx*TILE;P.py=P.ty*TILE;P.path=[];P.moving=null;}
+  if(P.grave&&!MAPS[P.grave.map])P.grave=null;
   P.hp=clamp(P.hp,1,maxHp());
 }
 function load(){

@@ -57,16 +57,27 @@ Attack, Strength, Defence, Ranged, Magic, Woodcutting, Mining.
   (timer pauses when the game is closed) and is persisted in the save.
   Respawn in town at full HP.
 
-## World (5 maps)
+## World (walled town + 4 biome regions, each with a dungeon)
+A single linear overworld chain. The town is fully enclosed by a stone wall
+with **one south gate**; everything else flows from it. Regions are huge
+(60×45), procedurally generated with a seeded RNG kept OFF the gameplay/loot
+stream, bordered by blocking biome edges, with sparse scattered resources.
 Town (bank, forge/shop, elder, guard, quest board, Skill Master Aldric,
-trophy monument) → Forest (goblins, wolves; **Goblin King**; NE exit →
-Ruins) and Mines (rats, skeleton archers; **Rock Horror**; SE exit → Swamp).
-Ruins: cultists (magic), gargoyles; **Lich Ardun** (magic, range 5).
-Swamp: bog stalkers (ranged), hag spawn (magic); **The Swamp Hag** (final boss).
-Bosses: big sprites (2×), ~5-minute respawns, 2 loot rolls with rarity boost.
+trophy monument) → **Whisperwood** (spiders, boars, forest bandits) →
+**Frostpeak Mountains** (frost wolves, ice sprites, snow trolls) →
+**Golden Plains** (steppe lions, war hawks, nomads) →
+**Ashen Desert** (sand scorpions, sand wraiths, dune raiders).
+The overworld holds only biome fodder; each region has a **dungeon** mouth
+('D') leading to a semi-boss + boss with the best loot:
+Hollow Warren (Spider Matron / Bandit King), Glacial Cavern (Ice Warden /
+Frost Giant), Sunken Barrow (Barrow Wight / Plains Warlord), and Pharaoh's
+Tomb (Tomb Guardian / **Sand Pharaoh**, the final boss).
+Bosses: big 2× sprites, ~5-min respawns, 2 loot rolls + rarity boost.
+Semi-bosses: elites (double loot roll + rarity boost, 2-min respawn).
 
 ## Retention & goals
-- 7 linear quests (last two: kill the Lich, kill the Swamp Hag).
+- 7 linear quests (the last four clear each region's dungeon boss, ending
+  with the Sand Pharaoh).
 - 3 daily tasks from a pool of 10 (seeded by date), login streak bonus.
 - Skillcapes at level 50 from Master Aldric (5,000 g) with small perks
   (+5% acc / +5% melee dmg / −5% dmg taken / 10% ammo save ×2 /
