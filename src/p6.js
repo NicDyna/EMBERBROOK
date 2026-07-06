@@ -18,7 +18,9 @@ function camera(){
   let camx=P.px+16-VW/(2*SCALE),camy=P.py+16-VH/(2*SCALE);
   if(mapW<VW/SCALE)camx=-(VW/SCALE-mapW)/2;else camx=clamp(camx,0,mapW-VW/SCALE);
   if(mapH<VH/SCALE)camy=-(VH/SCALE-mapH)/2;else camy=clamp(camy,0,mapH-VH/SCALE);
-  return{camx:Math.round(camx),camy:Math.round(camy)};
+  /* round to whole DEVICE pixels, not world pixels — otherwise the camera lurches
+     in SCALE-sized (1.4–3.2px) steps under the smoothly-interpolated player = jitter */
+  return{camx:Math.round(camx*SCALE)/SCALE,camy:Math.round(camy*SCALE)/SCALE};
 }
 function draw(){
   const W=world[P.map];
@@ -223,26 +225,29 @@ function playerFrame(){
   return f.stand;
 }
 
-/* ---------------- HUD ---------------- */
+/* ---------------- HUD ----------------
+   Called every frame, so it only touches the DOM when a value actually changes
+   (writing styles/text at 60 Hz forces layout/repaint thrash on mobile). */
+let _hud={};
 function updateHUD(){
-  $('hpfill').style.width=(100*P.hp/maxHp())+'%';
-  $('hptext').textContent=P.hp+'/'+maxHp();
-  $('gold').textContent=P.gold;
-  /* style button only matters for melee */
-  const styleBtn=$('stylebtn');
-  if(styleBtn){
-    if(combatMode()==='melee'){
-      styleBtn.style.display='';
-      styleBtn.textContent=P.style==='accurate'?'🎯':P.style==='aggressive'?'⚔️':'🛡️';
-    }else styleBtn.style.display='none';
+  const mh=maxHp(),mode=combatMode(),a=ammoFor(mode),ammo=a?invCount(a):-1;
+  if(P.hp!==_hud.hp||mh!==_hud.mh){
+    $('hpfill').style.width=(100*P.hp/mh)+'%';$('hptext').textContent=P.hp+'/'+mh;}
+  if(P.gold!==_hud.gold)$('gold').textContent=P.gold;
+  if(mode!==_hud.mode||P.style!==_hud.style){
+    const styleBtn=$('stylebtn');
+    if(styleBtn){
+      if(mode==='melee'){styleBtn.style.display='';
+        styleBtn.textContent=P.style==='accurate'?'🎯':P.style==='aggressive'?'⚔️':'🛡️';}
+      else styleBtn.style.display='none';
+    }
   }
-  /* ammo counter for ranged/magic */
-  const am=$('ammo');
-  if(am){
-    const a=ammoFor(combatMode());
-    if(a){am.style.display='';am.textContent=(a==='arrows'?'➶ ':'✦ ')+invCount(a);}
-    else am.style.display='none';
+  if(mode!==_hud.mode||a!==_hud.a||ammo!==_hud.ammo){
+    const am=$('ammo');
+    if(am){if(a){am.style.display='';am.textContent=(a==='arrows'?'➶ ':'✦ ')+ammo;}
+      else am.style.display='none';}
   }
+  _hud={hp:P.hp,mh,gold:P.gold,mode,style:P.style,a,ammo};
 }
 
 /* ---------------- minimap (toggle open, redrawn while visible) ---------- */

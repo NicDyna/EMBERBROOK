@@ -403,7 +403,7 @@ function findPath(map,sx,sy,dx,dy,adjacentOk){
   const prev=new Map();prev.set(key(sx,sy),null);
   const q=[[sx,sy]];
   const goal=(x,y)=>adjacentOk?(Math.abs(x-dx)+Math.abs(y-dy)===1):(x===dx&&y===dy);
-  const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+  const dirs=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
   while(q.length){
     const [x,y]=q.shift();
     if(goal(x,y)){
@@ -414,6 +414,8 @@ function findPath(map,sx,sy,dx,dy,adjacentOk){
     for(const[ddx,ddy]of dirs){
       const nx=x+ddx,ny=y+ddy,nk=key(nx,ny);
       if(prev.has(nk)||!walkable(map,nx,ny))continue;
+      /* a diagonal step may not slip through a wall corner */
+      if(ddx&&ddy&&(!walkable(map,x+ddx,y)||!walkable(map,x,y+ddy)))continue;
       prev.set(nk,key(x,y));q.push([nx,ny]);
     }
   }

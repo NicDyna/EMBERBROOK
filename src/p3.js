@@ -20,8 +20,9 @@ function freshPlayer(){return{
   daily:{date:'',tasks:[],prog:{},claimed:[]},
   login:{last:'',streak:0},
   reached:{},        // region ids the player has set foot in (unlocks fast travel)
+  bestiary:{},       // {creatureType:{dropKey:totalReceived}} — collection log
   grave:null,        // {map,x,y,items:[...],gold,left}  left = ms remaining
-  stats:{kills:0,deaths:0,chopped:0,mined:0,bossKills:{},legendaries:0,
+  stats:{kills:0,deaths:0,chopped:0,mined:0,bossKills:{},mobKills:{},legendaries:0,
          playMs:0,bestDrop:null,questsDone:0},
   ts:0,              // save timestamp (Date.now) for cloud LWW
   moving:null,path:[],action:null,
@@ -284,6 +285,20 @@ function levelFlash(txt){
   $('flashText').textContent=txt;
   const el=$('flash');el.classList.remove('go');
   void el.offsetWidth;el.classList.add('go');
+}
+/* rare-drop popup: a non-blocking banner (Epic+); Legendary/Unique add a
+   screen dim + particle burst. Auto-fades — never blocks play. */
+function itemPopup(piece){
+  const g=GEAR[piece.id];if(!g)return;
+  const r=piece.r||0;
+  $('itempopIcon').src=iconURL(piece.id);
+  const nm=$('itempopName');nm.textContent=gearName(piece);nm.style.color=RARITY[r].color;
+  $('itempopKind').textContent=(g.unique?'unique':(RARITY[r].name.trim()||'item')).toUpperCase();
+  const el=$('itempop');el.classList.remove('go','deluxe');void el.offsetWidth;el.classList.add('go');
+  if(r>=4){el.classList.add('deluxe');
+    const dim=$('popdim');dim.classList.add('go');setTimeout(()=>dim.classList.remove('go'),1900);
+    spawnParticles(P.px+16,P.py,RARITY[r].color,22,2);}
+  sfx('rare');
 }
 let xpBarTimer=null,xpSkill='woodcutting';
 function showXpBar(skill){

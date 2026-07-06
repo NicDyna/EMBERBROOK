@@ -49,43 +49,53 @@ async function syncNow(verbose){
 
 /* ---------------- input ---------------- */
 function bindInput(){
-cv.addEventListener('pointerdown',ev=>{
-  ensureAudio();
-  if($('panel').classList.contains('open'))return; /* full-screen menu open: ignore world taps */
-  /* tapping the world while chatting closes the bottom sheet and abandons the
-     conversation (re-talking starts from scratch), then the tap still acts */
-  if($('dialog').classList.contains('open'))closeDialog();
-  const rect=cv.getBoundingClientRect();
-  const{camx,camy}=camera();
-  const wx=(ev.clientX-rect.left)/SCALE+camx,wy=(ev.clientY-rect.top)/SCALE+camy;
-  const tx=Math.floor(wx/TILE),ty=Math.floor(wy/TILE);
-  /* priority: drop > mob (incl. boss body) > npc > resource/canopy > board/monument > walk */
-  const d=dropAt(P.map,tx,ty);
-  if(d){setLoot(d);clickMark={x:tx,y:ty,t0:T};return;}
-  const m=mobAt(P.map,tx,ty)||world[P.map].mobs.find(mm=>{
-    if(!mm.alive)return false;
-    const big=MOBS[mm.type].boss?30:18;
-    return Math.abs(mm.px+16-wx)<big&&Math.abs(mm.py+16-(MOBS[mm.type].boss?16:0)-wy)<big;
+  let press=null;
+  const endPress=()=>{if(press){clearTimeout(press.timer);press=null;}};
+  /* the world tap action (drop > mob > npc > resource > board/monument > walk) */
+  function tapAt(tx,ty,wx,wy){
+    const d=dropAt(P.map,tx,ty);
+    if(d){setLoot(d);clickMark={x:tx,y:ty,t0:T};return;}
+    const m=mobAt(P.map,tx,ty)||world[P.map].mobs.find(mm=>{
+      if(!mm.alive)return false;
+      const big=MOBS[mm.type].boss?30:18;
+      return Math.abs(mm.px+16-wx)<big&&Math.abs(mm.py+16-(MOBS[mm.type].boss?16:0)-wy)<big;
+    });
+    if(m){setFight(m);clickMark={x:m.tx,y:m.ty,t0:T};return;}
+    const n=npcAt(P.map,tx,ty);
+    if(n){setTalk(n);clickMark={x:n.tx,y:n.ty,t0:T};return;}
+    let r=resAt(P.map,tx,ty);
+    if(!r){const below=resAt(P.map,tx,ty+1); /* tree canopy renders a tile above its base */
+      if(below&&RES[below.type].skill==='woodcutting')r=below;}
+    if(tileAt(P.map,tx,ty)==='Q'){openQuestBoard();clickMark={x:tx,y:ty,t0:T};return;}
+    if(tileAt(P.map,tx,ty)==='H'){openMonument();clickMark={x:tx,y:ty,t0:T};return;}
+    if(r&&r.alive){setGather(r);clickMark={x:r.x,y:r.y,t0:T};return;}
+    if(walkable(P.map,tx,ty)){
+      P.action=null;
+      const sx=P.moving?P.moving.txx:P.tx, sy=P.moving?P.moving.tyy:P.ty;
+      const path=findPath(P.map,sx,sy,tx,ty,false);
+      if(path){P.path=path;clickMark={x:tx,y:ty,t0:T};}
+    }
+  }
+  cv.addEventListener('pointerdown',ev=>{
+    ensureAudio();endPress();
+    if($('panel').classList.contains('open'))return; /* full-screen menu open: ignore world taps */
+    /* a world tap while chatting closes the sheet + abandons the conversation */
+    if($('dialog').classList.contains('open'))closeDialog();
+    const rect=cv.getBoundingClientRect(),{camx,camy}=camera();
+    const wx=(ev.clientX-rect.left)/SCALE+camx,wy=(ev.clientY-rect.top)/SCALE+camy;
+    const tx=Math.floor(wx/TILE),ty=Math.floor(wy/TILE);
+    press={sx:ev.clientX,sy:ev.clientY,tx,ty,wx,wy,timer:0};
+    const drop=dropAt(P.map,tx,ty); /* long-tap a pile → itemised pickup menu */
+    if(drop)press.timer=setTimeout(()=>{press=null;openFloorMenu(drop);},450);
   });
-  if(m){setFight(m);clickMark={x:m.tx,y:m.ty,t0:T};return;}
-  const n=npcAt(P.map,tx,ty);
-  if(n){setTalk(n);clickMark={x:n.x,y:n.y,t0:T};return;}
-  let r=resAt(P.map,tx,ty);
-  if(!r){ /* canopy: trees render one tile tall above their base */
-    const below=resAt(P.map,tx,ty+1);
-    if(below&&RES[below.type].skill==='woodcutting')r=below;
-  }
-  if(tileAt(P.map,tx,ty)==='Q'){openQuestBoard();clickMark={x:tx,y:ty,t0:T};return;}
-  if(tileAt(P.map,tx,ty)==='H'){openMonument();clickMark={x:tx,y:ty,t0:T};return;}
-  if(r&&r.alive){setGather(r);clickMark={x:r.x,y:r.y,t0:T};return;}
-  if(walkable(P.map,tx,ty)){
-    P.action=null;
-    const sx=P.moving?P.moving.txx:P.tx, sy=P.moving?P.moving.tyy:P.ty;
-    const path=findPath(P.map,sx,sy,tx,ty,false);
-    if(path){P.path=path;clickMark={x:tx,y:ty,t0:T};}
-  }
-});
-window.addEventListener('resize',resize);
+  cv.addEventListener('pointermove',ev=>{
+    if(press&&(Math.abs(ev.clientX-press.sx)>12||Math.abs(ev.clientY-press.sy)>12))endPress();
+  });
+  cv.addEventListener('pointerup',()=>{
+    if(!press)return;const p=press;endPress();tapAt(p.tx,p.ty,p.wx,p.wy);
+  });
+  cv.addEventListener('pointercancel',endPress);
+  window.addEventListener('resize',resize);
 }
 
 /* ---------------- boot ---------------- */
@@ -127,9 +137,9 @@ function boot(){
 /* ---------------- debug handle ---------------- */
 window.EB={world,MAPS,ITEMS,TOOLS,GEAR,MOBS,CAPES,RARITY,QUESTS,
  update,camera,setGather,setFight,setLoot,openBank,openShop,openInventory,openEquipment,
- openSkills,openQuests,openQuestBoard,openSettings,openDialog,openMonument,openCapes,
+ openSkills,openQuests,openQuestBoard,openSettings,openDialog,openMonument,openCapes,openBestiary,
  addItem,addGear,invCount,equipGear,unequip,gearBonus,playerAttack,rollLoot,rollRarity,
- spawnDrop,pickupDrop,killMob,eatFood,save,load,serialize,applySave,migrateV1,
+ spawnDrop,pickupDrop,pickupOne,openFloorMenu,killMob,eatFood,save,load,serialize,applySave,migrateV1,
  hurtPlayer,die,maxHp,lvlFor,totalLevel,questState,freshPlayer,rebuildPlayerSprite,
  syncNow,syncPull,syncPush,
  get P(){return P},set P(v){P=v},get T(){return T},get SCALE(){return SCALE}};

@@ -601,7 +601,7 @@ function findPath(map,sx,sy,dx,dy,adjacentOk){
   const prev=new Map();prev.set(key(sx,sy),null);
   const q=[[sx,sy]];
   const goal=(x,y)=>adjacentOk?(Math.abs(x-dx)+Math.abs(y-dy)===1):(x===dx&&y===dy);
-  const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+  const dirs=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
   while(q.length){
     const [x,y]=q.shift();
     if(goal(x,y)){
@@ -612,6 +612,8 @@ function findPath(map,sx,sy,dx,dy,adjacentOk){
     for(const[ddx,ddy]of dirs){
       const nx=x+ddx,ny=y+ddy,nk=key(nx,ny);
       if(prev.has(nk)||!walkable(map,nx,ny))continue;
+      /* a diagonal step may not slip through a wall corner */
+      if(ddx&&ddy&&(!walkable(map,x+ddx,y)||!walkable(map,x,y+ddy)))continue;
       prev.set(nk,key(x,y));q.push([nx,ny]);
     }
   }
@@ -639,8 +641,9 @@ function freshPlayer(){return{
   daily:{date:'',tasks:[],prog:{},claimed:[]},
   login:{last:'',streak:0},
   reached:{},        // region ids the player has set foot in (unlocks fast travel)
+  bestiary:{},       // {creatureType:{dropKey:totalReceived}} — collection log
   grave:null,        // {map,x,y,items:[...],gold,left}  left = ms remaining
-  stats:{kills:0,deaths:0,chopped:0,mined:0,bossKills:{},legendaries:0,
+  stats:{kills:0,deaths:0,chopped:0,mined:0,bossKills:{},mobKills:{},legendaries:0,
          playMs:0,bestDrop:null,questsDone:0},
   ts:0,              // save timestamp (Date.now) for cloud LWW
   moving:null,path:[],action:null,
@@ -903,6 +906,20 @@ function levelFlash(txt){
   $('flashText').textContent=txt;
   const el=$('flash');el.classList.remove('go');
   void el.offsetWidth;el.classList.add('go');
+}
+/* rare-drop popup: a non-blocking banner (Epic+); Legendary/Unique add a
+   screen dim + particle burst. Auto-fades — never blocks play. */
+function itemPopup(piece){
+  const g=GEAR[piece.id];if(!g)return;
+  const r=piece.r||0;
+  $('itempopIcon').src=iconURL(piece.id);
+  const nm=$('itempopName');nm.textContent=gearName(piece);nm.style.color=RARITY[r].color;
+  $('itempopKind').textContent=(g.unique?'unique':(RARITY[r].name.trim()||'item')).toUpperCase();
+  const el=$('itempop');el.classList.remove('go','deluxe');void el.offsetWidth;el.classList.add('go');
+  if(r>=4){el.classList.add('deluxe');
+    const dim=$('popdim');dim.classList.add('go');setTimeout(()=>dim.classList.remove('go'),1900);
+    spawnParticles(P.px+16,P.py,RARITY[r].color,22,2);}
+  sfx('rare');
 }
 let xpBarTimer=null,xpSkill='woodcutting';
 function showXpBar(skill){
@@ -1740,15 +1757,23 @@ function findTarget(){
 
 /* ---------------- ground drops ---------------- */
 const DROP_TTL=90000;
-function spawnDrop(map,x,y,payload){ // payload {gold?, items?:[{id,qty}|{gear}]}
+/* collection log: credit `amt` of `key` to creature `src`. No-op when untagged —
+   player-dropped / quest / gravestone loot carries no source creature. */
+function bestiaryCredit(src,key,amt){
+  if(!src||!key||amt<=0)return;
+  const b=P.bestiary||(P.bestiary={}),e=b[src]||(b[src]={});
+  e[key]=(e[key]||0)+amt;
+}
+function spawnDrop(map,x,y,payload){ // payload {gold?, items?:[{id,qty}|{gear}], src?}
   let d=dropAt(map,x,y);
   if(!d){d={x,y,gold:0,items:[],ts:T,grave:false};world[map].drops.push(d);}
   d.ts=T;
-  if(payload.gold)d.gold+=payload.gold;
+  const src=payload.src;
+  if(payload.gold){d.gold+=payload.gold;if(src)d.goldSrc=src;}
   if(payload.items)for(const it of payload.items){
-    if(it.gear){d.items.push({gear:it.gear});continue;}
+    if(it.gear){d.items.push({gear:it.gear,src});continue;}
     const ex=d.items.find(s=>s.id===it.id&&!s.gear);
-    if(ex)ex.qty+=it.qty;else d.items.push({id:it.id,qty:it.qty});
+    if(ex){ex.qty+=it.qty;if(src)ex.src=src;}else d.items.push({id:it.id,qty:it.qty,src});
   }
   return d;
 }
@@ -1758,20 +1783,20 @@ function bestRarityOf(d){
 }
 function pickupDrop(d){
   const W=world[P.map];
-  if(d.gold>0){addGold(d.gold);floater(P.px+16,P.py-10,'+'+d.gold+'g','#e8b64c');sfx('coin');d.gold=0;}
+  if(d.gold>0){addGold(d.gold);floater(P.px+16,P.py-10,'+'+d.gold+'g','#e8b64c');sfx('coin');
+    bestiaryCredit(d.goldSrc,'gold',d.gold);d.gold=0;}
   const remain=[];
   for(const it of d.items){
     if(it.gear){
       if(addGear(it.gear)){
-        const nm=gearName(it.gear);
-        toast('+ '+nm,(it.gear.r||0)>=2?'gold':'drop');
-        if((it.gear.r||0)>=3){sfx('rare');
-          P.stats.bestDrop=nm;
-          if(it.gear.r>=4){P.stats.legendaries++;levelFlash((it.gear.r===5?'UNIQUE! ':'LEGENDARY! ')+nm);}
-        }else sfx('loot');
+        const nm=gearName(it.gear),r=it.gear.r||0;
+        bestiaryCredit(it.src,it.gear.id.slice(0,2)==='u_'?it.gear.id:'gear',1);
+        if(r>=3){itemPopup(it.gear);P.stats.bestDrop=nm;if(r>=4)P.stats.legendaries++;}
+        else{toast('+ '+nm,r>=2?'gold':'drop');sfx('loot');}
       }else{remain.push(it);toast('Inventory full','bad');}
     }else{
-      if(addItem(it.id,it.qty)){toast('+'+it.qty+' '+ITEMS[it.id].name,'drop');sfx('loot');}
+      if(addItem(it.id,it.qty)){bestiaryCredit(it.src,it.id,it.qty);
+        toast('+'+it.qty+' '+ITEMS[it.id].name,'drop');sfx('loot');}
       else{remain.push(it);toast('Inventory full','bad');}
     }
   }
@@ -1781,6 +1806,32 @@ function pickupDrop(d){
     W.drops.splice(W.drops.indexOf(d),1);
   }
   save();
+}
+/* selective pickup for the long-tap floor menu: take ONE entry ('gold' or a
+   specific item-entry object). Returns true | 'full' | false. */
+function pickupOne(d,spec){
+  const W=world[P.map];
+  if(spec==='gold'){
+    if(d.gold<=0)return false;
+    addGold(d.gold);floater(P.px+16,P.py-10,'+'+d.gold+'g','#e8b64c');sfx('coin');
+    bestiaryCredit(d.goldSrc,'gold',d.gold);d.gold=0;
+  }else{
+    const idx=d.items.indexOf(spec);if(idx<0)return false;
+    const it=spec;
+    if(it.gear){
+      if(!addGear(it.gear))return 'full';
+      const nm=gearName(it.gear),r=it.gear.r||0;
+      bestiaryCredit(it.src,it.gear.id.slice(0,2)==='u_'?it.gear.id:'gear',1);
+      if(r>=3){itemPopup(it.gear);P.stats.bestDrop=nm;if(r>=4)P.stats.legendaries++;}
+      else{toast('+ '+nm,r>=2?'gold':'drop');sfx('loot');}
+    }else{
+      if(!addItem(it.id,it.qty))return 'full';
+      bestiaryCredit(it.src,it.id,it.qty);toast('+'+it.qty+' '+ITEMS[it.id].name,'drop');sfx('loot');
+    }
+    d.items.splice(idx,1);
+  }
+  if(!d.items.length&&d.gold<=0){if(d.grave)P.grave=null;W.drops.splice(W.drops.indexOf(d),1);}
+  save();return true;
 }
 
 /* ---------------- loot generation ---------------- */
@@ -1836,7 +1887,11 @@ function doAction(){
     return;
   }
   if(P.action.kind==='loot'){
-    if(P.tx===t.x&&P.ty===t.y){pickupDrop(t);P.action=null;}
+    if(P.tx===t.x&&P.ty===t.y){
+      if(P.action.one){if(pickupOne(t,P.action.one)==='full')toast('Inventory full!','bad');}
+      else pickupDrop(t);
+      P.action=null;
+    }
     else if(!P.path.length&&!P.moving){routeToTarget(t.x,t.y,false);
       if(!P.path.length)P.action=null;}
     return;
@@ -1913,11 +1968,12 @@ function killMob(m){
   const d=MOBS[m.type];
   m.alive=false;m.aggro=false;m.respawnAt=T+(d.respawn||9000);
   gainXp(trainSkill(),d.xp);
-  const loot=rollLoot(m);
+  const loot=rollLoot(m);loot.src=m.type; /* tag for the bestiary */
   spawnDrop(P.map,m.tx,m.ty,loot);
   sfx('kill');
   spawnParticles(m.px+16,m.py+10,d.boss?'#ffcf5a':'#e8b070',d.boss?22:12,d.boss?2.2:1.4);
   P.stats.kills++;
+  (P.stats.mobKills||(P.stats.mobKills={}))[m.type]=(P.stats.mobKills[m.type]||0)+1;
   if(d.boss){
     P.stats.bossKills[m.type]=(P.stats.bossKills[m.type]||0)+1;
     levelFlash(d.name+' defeated!');shake(6);
@@ -2083,7 +2139,9 @@ function camera(){
   let camx=P.px+16-VW/(2*SCALE),camy=P.py+16-VH/(2*SCALE);
   if(mapW<VW/SCALE)camx=-(VW/SCALE-mapW)/2;else camx=clamp(camx,0,mapW-VW/SCALE);
   if(mapH<VH/SCALE)camy=-(VH/SCALE-mapH)/2;else camy=clamp(camy,0,mapH-VH/SCALE);
-  return{camx:Math.round(camx),camy:Math.round(camy)};
+  /* round to whole DEVICE pixels, not world pixels — otherwise the camera lurches
+     in SCALE-sized (1.4–3.2px) steps under the smoothly-interpolated player = jitter */
+  return{camx:Math.round(camx*SCALE)/SCALE,camy:Math.round(camy*SCALE)/SCALE};
 }
 function draw(){
   const W=world[P.map];
@@ -2288,26 +2346,29 @@ function playerFrame(){
   return f.stand;
 }
 
-/* ---------------- HUD ---------------- */
+/* ---------------- HUD ----------------
+   Called every frame, so it only touches the DOM when a value actually changes
+   (writing styles/text at 60 Hz forces layout/repaint thrash on mobile). */
+let _hud={};
 function updateHUD(){
-  $('hpfill').style.width=(100*P.hp/maxHp())+'%';
-  $('hptext').textContent=P.hp+'/'+maxHp();
-  $('gold').textContent=P.gold;
-  /* style button only matters for melee */
-  const styleBtn=$('stylebtn');
-  if(styleBtn){
-    if(combatMode()==='melee'){
-      styleBtn.style.display='';
-      styleBtn.textContent=P.style==='accurate'?'🎯':P.style==='aggressive'?'⚔️':'🛡️';
-    }else styleBtn.style.display='none';
+  const mh=maxHp(),mode=combatMode(),a=ammoFor(mode),ammo=a?invCount(a):-1;
+  if(P.hp!==_hud.hp||mh!==_hud.mh){
+    $('hpfill').style.width=(100*P.hp/mh)+'%';$('hptext').textContent=P.hp+'/'+mh;}
+  if(P.gold!==_hud.gold)$('gold').textContent=P.gold;
+  if(mode!==_hud.mode||P.style!==_hud.style){
+    const styleBtn=$('stylebtn');
+    if(styleBtn){
+      if(mode==='melee'){styleBtn.style.display='';
+        styleBtn.textContent=P.style==='accurate'?'🎯':P.style==='aggressive'?'⚔️':'🛡️';}
+      else styleBtn.style.display='none';
+    }
   }
-  /* ammo counter for ranged/magic */
-  const am=$('ammo');
-  if(am){
-    const a=ammoFor(combatMode());
-    if(a){am.style.display='';am.textContent=(a==='arrows'?'➶ ':'✦ ')+invCount(a);}
-    else am.style.display='none';
+  if(mode!==_hud.mode||a!==_hud.a||ammo!==_hud.ammo){
+    const am=$('ammo');
+    if(am){if(a){am.style.display='';am.textContent=(a==='arrows'?'➶ ':'✦ ')+ammo;}
+      else am.style.display='none';}
   }
+  _hud={hp:P.hp,mh,gold:P.gold,mode,style:P.style,a,ammo};
 }
 
 /* ---------------- minimap (toggle open, redrawn while visible) ---------- */
@@ -2506,6 +2567,48 @@ function openMonument(){
   else h+='<span class="hint">None yet — master a skill to 50!</span>';
   h+='</div>';
   openPanel('Town Monument',h);
+}
+
+/* ---------------- bestiary (collection log) ----------------
+   Every creature's full drop list; each drop is a silhouette until first
+   obtained, then shows its icon + cumulative amount received (see p5). */
+function creatureDrops(type){
+  const d=MOBS[type],out=[],seen=new Set();
+  const add=(key,kind,label)=>{if(!seen.has(key)){seen.add(key);out.push({key,kind,label});}};
+  let hasGear=false;
+  for(const e of d.loot){
+    if(e.gold)add('gold','gold','Gold');
+    else if(e.item)add(e.item,'item',ITEMS[e.item]?ITEMS[e.item].name:e.item);
+    else if(e.gear)hasGear=true;
+  }
+  if(hasGear)add('gear','gear','Equipment');
+  if(d.unique&&GEAR[d.unique])add(d.unique,'unique',GEAR[d.unique].name);
+  return out;
+}
+function bestiarySlot(dr,n){
+  if(n<=0)return '<div class="slot empty" title="???" style="font-weight:700;color:var(--dim)">?</div>';
+  const qty=n>9999?fmtXp(n):n;
+  const inner=dr.kind==='gear'?'<span style="font-size:19px">⚔️</span>'
+    :'<img src="'+iconURL(dr.kind==='gold'?'gold':dr.key)+'" alt="">';
+  return '<div class="slot" title="'+esc(dr.label)+'">'+inner+'<span class="qty">'+qty+'</span></div>';
+}
+function openBestiary(){
+  let h='',lastCat='',totalGot=0,totalAll=0;
+  for(const type in MOBS){
+    const d=MOBS[type],drops=creatureDrops(type),rec=(P.bestiary&&P.bestiary[type])||{};
+    const got=drops.filter(dr=>(rec[dr.key]||0)>0).length;
+    totalGot+=got;totalAll+=drops.length;
+    const cat=d.boss?'Bosses':d.semi?'Dungeon Elites':'Creatures';
+    if(cat!==lastCat){h+='<div class="sect">'+cat+'</div>';lastCat=cat;}
+    const kills=(P.stats.mobKills&&P.stats.mobKills[type])||0;
+    const done=drops.length>0&&got===drops.length;
+    h+='<div class="qrow" style="flex-direction:column;align-items:stretch;gap:6px">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center">'+
+      '<span>'+esc(d.name)+(done?' <span class="tag done">✓</span>':'')+'</span>'+
+      '<span class="tag'+(done?' ready':'')+'">'+got+'/'+drops.length+(kills?' · '+kills+' slain':'')+'</span></div>'+
+      '<div class="grid small" style="margin:0">'+drops.map(dr=>bestiarySlot(dr,rec[dr.key]||0)).join('')+'</div></div>';
+  }
+  openPanel('Bestiary — '+totalGot+'/'+totalAll+' logged',h);
 }
 
 /* ---------------- bank ---------------- */
@@ -2717,6 +2820,53 @@ function addOpt(container,label,fn){
   b.addEventListener('click',fn);container.appendChild(b);
 }
 
+/* ---------------- floor-item menu (long-tap a ground pile) ----------------
+   Lists everything on a tile; take one, take all, and swap-when-full. */
+let floorDrop=null, swapPending=null;
+function floorEntryRow(icon,rim,label,arg){
+  return '<div class="qrow"><span><img class="mini" src="'+icon+'"'+rim+'> '+label+'</span>'+
+    '<button class="btn small" data-act="takeone" data-arg="'+arg+'">Take</button></div>';
+}
+function openFloorMenu(d){
+  if(!d||(!d.items.length&&d.gold<=0)){closePanel();floorDrop=null;return;}
+  floorDrop=d;swapPending=null;
+  const far=!(P.tx===d.x&&P.ty===d.y);
+  let h='<div class="hint">'+(far?'Tap an item to walk over and grab just that one.':'Tap an item to grab it.')+'</div>';
+  if(d.gold>0)h+=floorEntryRow(iconURL('gold'),'',d.gold+' gold','gold');
+  d.items.forEach((it,i)=>{
+    const label=it.gear?esc(gearName(it.gear)):esc(ITEMS[it.id].name)+(it.qty>1?' × '+it.qty:'');
+    const rim=it.gear?' style="box-shadow:inset 0 0 0 2px '+gearColor(it.gear)+'55"':'';
+    h+=floorEntryRow(iconURL(it.gear?it.gear.id:it.id),rim,label,''+i);
+  });
+  h+='<button class="btn" data-act="takeall">Take everything</button>';
+  openPanel('On the ground',h);
+}
+function floorTake(spec){
+  const d=floorDrop;if(!d)return;
+  if(spec==='all'){
+    if(P.tx===d.x&&P.ty===d.y)pickupDrop(d);else setLoot(d);
+    closePanel();floorDrop=null;return;
+  }
+  const entry=spec==='gold'?'gold':d.items[+spec];
+  if(!entry){openFloorMenu(d);return;}
+  if(P.tx===d.x&&P.ty===d.y){
+    if(pickupOne(d,entry)==='full')openSwapMenu(d,entry);
+    else openFloorMenu(d); /* refresh remaining / auto-close if empty */
+  }else{
+    P.action={kind:'loot',x:d.x,y:d.y,one:entry};
+    routeToTarget(d.x,d.y,false);closePanel();floorDrop=null;
+  }
+}
+function openSwapMenu(d,entry){
+  const want=entry==='gold'?'gold':(entry.gear?gearName(entry.gear):ITEMS[entry.id].name);
+  swapPending={d,entry};
+  let h='<div class="sect">Bag full — drop something to make room for '+esc(want)+'</div><div class="grid small">';
+  P.inv.forEach((s,i)=>h+=slotHtml(s,i,'swapdrop'));
+  if(!P.inv.length)h+='<div class="hint" style="grid-column:1/-1">Bag is empty</div>';
+  h+='</div><button class="btn" data-act="floorback">Cancel</button>';
+  openPanel('Make room',h);
+}
+
 /* ---------------- panel action delegation ---------------- */
 function bindUI(){
 $('pclose').addEventListener('click',closePanel);
@@ -2820,11 +2970,22 @@ $('pbody').addEventListener('click',ev=>{
   }
   else if(act==='reset'){if(confirm('Reset Emberbrook?\n\nThis deletes your saved character and starts a brand-new game in the current world. This cannot be undone.'))resetSave();}
   else if(act==='warp'){warpTo(arg);if(P.map===arg)closePanel();else openTravel();}
+  else if(act==='takeone'){floorTake(arg);}
+  else if(act==='takeall'){floorTake('all');}
+  else if(act==='swapdrop'){
+    const i=+arg,s=P.inv[i];if(!s||!swapPending)return;
+    const dd=swapPending.d,entry=swapPending.entry;swapPending=null;
+    P.inv.splice(i,1);
+    spawnDrop(P.map,P.tx,P.ty,s.gear?{items:[{gear:s.gear}]}:{items:[{id:s.id,qty:s.qty}]});
+    pickupOne(dd,entry);openFloorMenu(dd);
+  }
+  else if(act==='floorback'){openFloorMenu(floorDrop);}
 });
 $('bInv').addEventListener('click',()=>{ensureAudio();openInventory();});
 $('bEquip').addEventListener('click',()=>{ensureAudio();openEquipment();});
 $('bSkills').addEventListener('click',()=>{ensureAudio();openSkills();});
 $('bQuests').addEventListener('click',()=>{ensureAudio();openQuests();});
+{const bb=$('bBestiary');if(bb)bb.addEventListener('click',()=>{ensureAudio();openBestiary();});}
 $('bMap').addEventListener('click',()=>{ensureAudio();toggleMinimap();});
 $('minimap').addEventListener('click',()=>{minimapOn=false;$('minimap').classList.remove('open');});
 $('bGear').addEventListener('click',()=>{ensureAudio();openSettings();});
@@ -2888,43 +3049,53 @@ async function syncNow(verbose){
 
 /* ---------------- input ---------------- */
 function bindInput(){
-cv.addEventListener('pointerdown',ev=>{
-  ensureAudio();
-  if($('panel').classList.contains('open'))return; /* full-screen menu open: ignore world taps */
-  /* tapping the world while chatting closes the bottom sheet and abandons the
-     conversation (re-talking starts from scratch), then the tap still acts */
-  if($('dialog').classList.contains('open'))closeDialog();
-  const rect=cv.getBoundingClientRect();
-  const{camx,camy}=camera();
-  const wx=(ev.clientX-rect.left)/SCALE+camx,wy=(ev.clientY-rect.top)/SCALE+camy;
-  const tx=Math.floor(wx/TILE),ty=Math.floor(wy/TILE);
-  /* priority: drop > mob (incl. boss body) > npc > resource/canopy > board/monument > walk */
-  const d=dropAt(P.map,tx,ty);
-  if(d){setLoot(d);clickMark={x:tx,y:ty,t0:T};return;}
-  const m=mobAt(P.map,tx,ty)||world[P.map].mobs.find(mm=>{
-    if(!mm.alive)return false;
-    const big=MOBS[mm.type].boss?30:18;
-    return Math.abs(mm.px+16-wx)<big&&Math.abs(mm.py+16-(MOBS[mm.type].boss?16:0)-wy)<big;
+  let press=null;
+  const endPress=()=>{if(press){clearTimeout(press.timer);press=null;}};
+  /* the world tap action (drop > mob > npc > resource > board/monument > walk) */
+  function tapAt(tx,ty,wx,wy){
+    const d=dropAt(P.map,tx,ty);
+    if(d){setLoot(d);clickMark={x:tx,y:ty,t0:T};return;}
+    const m=mobAt(P.map,tx,ty)||world[P.map].mobs.find(mm=>{
+      if(!mm.alive)return false;
+      const big=MOBS[mm.type].boss?30:18;
+      return Math.abs(mm.px+16-wx)<big&&Math.abs(mm.py+16-(MOBS[mm.type].boss?16:0)-wy)<big;
+    });
+    if(m){setFight(m);clickMark={x:m.tx,y:m.ty,t0:T};return;}
+    const n=npcAt(P.map,tx,ty);
+    if(n){setTalk(n);clickMark={x:n.tx,y:n.ty,t0:T};return;}
+    let r=resAt(P.map,tx,ty);
+    if(!r){const below=resAt(P.map,tx,ty+1); /* tree canopy renders a tile above its base */
+      if(below&&RES[below.type].skill==='woodcutting')r=below;}
+    if(tileAt(P.map,tx,ty)==='Q'){openQuestBoard();clickMark={x:tx,y:ty,t0:T};return;}
+    if(tileAt(P.map,tx,ty)==='H'){openMonument();clickMark={x:tx,y:ty,t0:T};return;}
+    if(r&&r.alive){setGather(r);clickMark={x:r.x,y:r.y,t0:T};return;}
+    if(walkable(P.map,tx,ty)){
+      P.action=null;
+      const sx=P.moving?P.moving.txx:P.tx, sy=P.moving?P.moving.tyy:P.ty;
+      const path=findPath(P.map,sx,sy,tx,ty,false);
+      if(path){P.path=path;clickMark={x:tx,y:ty,t0:T};}
+    }
+  }
+  cv.addEventListener('pointerdown',ev=>{
+    ensureAudio();endPress();
+    if($('panel').classList.contains('open'))return; /* full-screen menu open: ignore world taps */
+    /* a world tap while chatting closes the sheet + abandons the conversation */
+    if($('dialog').classList.contains('open'))closeDialog();
+    const rect=cv.getBoundingClientRect(),{camx,camy}=camera();
+    const wx=(ev.clientX-rect.left)/SCALE+camx,wy=(ev.clientY-rect.top)/SCALE+camy;
+    const tx=Math.floor(wx/TILE),ty=Math.floor(wy/TILE);
+    press={sx:ev.clientX,sy:ev.clientY,tx,ty,wx,wy,timer:0};
+    const drop=dropAt(P.map,tx,ty); /* long-tap a pile → itemised pickup menu */
+    if(drop)press.timer=setTimeout(()=>{press=null;openFloorMenu(drop);},450);
   });
-  if(m){setFight(m);clickMark={x:m.tx,y:m.ty,t0:T};return;}
-  const n=npcAt(P.map,tx,ty);
-  if(n){setTalk(n);clickMark={x:n.x,y:n.y,t0:T};return;}
-  let r=resAt(P.map,tx,ty);
-  if(!r){ /* canopy: trees render one tile tall above their base */
-    const below=resAt(P.map,tx,ty+1);
-    if(below&&RES[below.type].skill==='woodcutting')r=below;
-  }
-  if(tileAt(P.map,tx,ty)==='Q'){openQuestBoard();clickMark={x:tx,y:ty,t0:T};return;}
-  if(tileAt(P.map,tx,ty)==='H'){openMonument();clickMark={x:tx,y:ty,t0:T};return;}
-  if(r&&r.alive){setGather(r);clickMark={x:r.x,y:r.y,t0:T};return;}
-  if(walkable(P.map,tx,ty)){
-    P.action=null;
-    const sx=P.moving?P.moving.txx:P.tx, sy=P.moving?P.moving.tyy:P.ty;
-    const path=findPath(P.map,sx,sy,tx,ty,false);
-    if(path){P.path=path;clickMark={x:tx,y:ty,t0:T};}
-  }
-});
-window.addEventListener('resize',resize);
+  cv.addEventListener('pointermove',ev=>{
+    if(press&&(Math.abs(ev.clientX-press.sx)>12||Math.abs(ev.clientY-press.sy)>12))endPress();
+  });
+  cv.addEventListener('pointerup',()=>{
+    if(!press)return;const p=press;endPress();tapAt(p.tx,p.ty,p.wx,p.wy);
+  });
+  cv.addEventListener('pointercancel',endPress);
+  window.addEventListener('resize',resize);
 }
 
 /* ---------------- boot ---------------- */
@@ -2966,9 +3137,9 @@ function boot(){
 /* ---------------- debug handle ---------------- */
 window.EB={world,MAPS,ITEMS,TOOLS,GEAR,MOBS,CAPES,RARITY,QUESTS,
  update,camera,setGather,setFight,setLoot,openBank,openShop,openInventory,openEquipment,
- openSkills,openQuests,openQuestBoard,openSettings,openDialog,openMonument,openCapes,
+ openSkills,openQuests,openQuestBoard,openSettings,openDialog,openMonument,openCapes,openBestiary,
  addItem,addGear,invCount,equipGear,unequip,gearBonus,playerAttack,rollLoot,rollRarity,
- spawnDrop,pickupDrop,killMob,eatFood,save,load,serialize,applySave,migrateV1,
+ spawnDrop,pickupDrop,pickupOne,openFloorMenu,killMob,eatFood,save,load,serialize,applySave,migrateV1,
  hurtPlayer,die,maxHp,lvlFor,totalLevel,questState,freshPlayer,rebuildPlayerSprite,
  syncNow,syncPull,syncPush,
  get P(){return P},set P(v){P=v},get T(){return T},get SCALE(){return SCALE}};

@@ -6,7 +6,7 @@ const {JSDOM}=require('jsdom');
 const OUT=process.argv[2]||'.';
 let html=fs.readFileSync(__dirname+'/static/index.html','utf8');
 const game=fs.readFileSync(__dirname+'/static/game.js','utf8');
-html=html.replace('<script src="/game.js"></script>','<script>'+game+'</script>');
+html=html.replace(/<script src="\/game\.js[^"]*"><\/script>/,'<script>'+game+'</script>');
 const dom=new JSDOM(html,{runScripts:'dangerously',pretendToBeVisual:true,url:'https://localhost/',
   beforeParse(window){
     window.fetch=()=>Promise.reject(new Error('offline'));

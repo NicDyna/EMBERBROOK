@@ -114,11 +114,20 @@ attacker, target)` + timed effect entries on mob state, covering the 11 keywords
 - **Save-version bump + migration** for: Crafting skill, node charges, weapon effect data,
   bestiary map. (Existing `applySave` already tolerates unknown maps / missing fields.)
 
-## 11. Suggested build order
-1. **Movement fixes (§8)** — quick, low-risk, improves the whole game immediately.
-2. **Bestiary + rare popup + floor menu (§5–7)** — mostly additive UI/data, high polish payoff.
-3. **Crafting skill + base crafting + tiered resources/node-charges + danger-zoned maps (§1–3)**
-   — the economy backbone.
-4. **Effects engine + fusion tree (§9, §4)** — the endgame payoff; depends on 3 + the effects engine.
+## 11. Build order & status
+1. ✅ **Movement fixes (§8)** — device-pixel camera rounding, 8-dir pathfinding (corner-guarded),
+   dirty-flagged `updateHUD`. Done.
+2. ✅ **Bestiary + rare popup + floor menu (§5–7)** — `P.bestiary` credited on pickup via
+   source-tagged drops; 🐾 button → `openBestiary`; Epic+ `itemPopup` banner; long-tap →
+   `openFloorMenu` selective `pickupOne` + swap. Done.
+3. ⏳ **Crafting skill + base crafting + tiered resources/node-charges + danger-zoned maps (§1–3)**
+   — the economy backbone. **NEXT.**
+4. ⏳ **Effects engine + fusion tree (§9, §4)** — endgame payoff; depends on 3.
 
 Each phase: edit `src/`, rebuild `static/game.js`, bump `sw.js`, run + extend `smoke.js`.
+
+**Before starting phase 3, the OPEN decisions in §10 need answers** (base-crafting interface,
+XP curve numbers, drop-source remap, effect-variant list).
+
+> **Resume in a new session:** open Claude Code in this repo and say *"continue Emberbrook v3,
+> phase 3, per DESIGN-v3.md"*. Memory + this doc carry the full context.

@@ -207,6 +207,13 @@ setTimeout(()=>{
   ok(boss.respawnAt-w.EB.T>=200000,'boss respawn ~5 min: '+(boss.respawnAt-EB.T)+'ms');
   ok(EB.world.forest_dungeon.drops.length>0,'boss dropped loot on ground');
 
+  /* ---------- bestiary: per-creature kills + drop crediting ---------- */
+  ok(EB.P.stats.mobKills&&EB.P.stats.mobKills.bandit_king>=1,'per-creature kill count tracked');
+  const bdrop=EB.world.forest_dungeon.drops[0];
+  if(bdrop){tp('forest_dungeon',bdrop.x,bdrop.y);EB.P.inv=[];EB.pickupDrop(bdrop);}
+  ok(EB.P.bestiary&&EB.P.bestiary.bandit_king&&Object.keys(EB.P.bestiary.bandit_king).length>0,
+     'bestiary credited drops to the creature: '+JSON.stringify(EB.P.bestiary&&EB.P.bestiary.bandit_king));
+
   /* ---------- capes ---------- */
   EB.P.gold=30000;EB.P.xp.woodcutting=w.eval('xpAt(50)');
   ok(w.eval('lvl("woodcutting")')===50,'woodcutting at 50');
@@ -223,7 +230,18 @@ setTimeout(()=>{
   /* ---------- panels render without throwing ---------- */
   EB.openInventory();EB.openEquipment();EB.openSkills();EB.openQuests();
   EB.openQuestBoard();EB.openBank();EB.openShop();EB.openMonument();EB.openCapes();EB.openSettings();
-  ok(true,'all 10 panels rendered');
+  EB.openBestiary();
+  ok(true,'all 11 panels rendered');
+
+  /* ---------- floor menu: selective (one-item) pickup ---------- */
+  tp('forest',40,20);EB.P.inv=[];
+  EB.spawnDrop('forest',40,20,{gold:5,items:[{id:'bone',qty:2},{id:'logs',qty:1}]});
+  const fd=EB.world.forest.drops.find(d=>d.x===40&&d.y===20);
+  EB.openFloorMenu(fd); // renders without throwing
+  const n0=fd.items.length;
+  EB.pickupOne(fd,fd.items[0]);
+  ok(fd.items.length===n0-1&&EB.invCount('bone')===2,'selective pickup took one stack, left the rest');
+  ok(EB.invCount('logs')===0&&fd.gold===5,'the other item + gold stayed on the ground');
 
   /* ---------- save / load roundtrip incl. world drops ---------- */
   EB.spawnDrop('forest',5,5,{gold:42,items:[{id:'bone',qty:2}]});

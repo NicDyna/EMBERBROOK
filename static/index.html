@@ -136,6 +136,22 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);
 .mmhead{display:flex;justify-content:space-between;align-items:baseline;gap:18px;color:var(--gold);font-size:14px;letter-spacing:1px}
 .mmhead .mmhint{color:var(--dim);font-size:10px;letter-spacing:0}
 #mmcv{image-rendering:pixelated;border:2px solid var(--border);border-radius:6px;background:#14110d;display:block;max-width:100%}
+/* rare-drop popup (non-blocking banner; deluxe adds a screen dim) */
+#popdim{position:fixed;inset:0;z-index:7;background:#000;opacity:0;pointer-events:none;transition:opacity .3s}
+#popdim.go{opacity:.55}
+#itempop{position:fixed;left:50%;top:36%;z-index:8;transform:translate(-50%,-50%);
+  display:flex;flex-direction:column;align-items:center;gap:5px;padding:14px 24px;
+  background:#1d1a16f2;border:3px solid var(--border);border-radius:12px;box-shadow:0 8px 40px #000;
+  opacity:0;pointer-events:none;text-align:center;min-width:180px}
+#itempop.go{animation:itempop 2.2s cubic-bezier(.2,.9,.3,1) forwards}
+#itempop.deluxe{border-width:4px;padding:18px 30px}
+@keyframes itempop{0%{opacity:0;transform:translate(-50%,-50%) scale(.65)}
+  12%{opacity:1;transform:translate(-50%,-50%) scale(1.06)}22%{transform:translate(-50%,-50%) scale(1)}
+  82%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-58%) scale(1)}}
+#itempopIcon{width:56px;height:56px;image-rendering:pixelated}
+#itempop.deluxe #itempopIcon{width:72px;height:72px}
+#itempopName{font-size:16px;font-weight:700;text-shadow:0 2px 0 #000,0 0 14px currentColor}
+#itempopKind{font-size:10px;color:var(--dim);letter-spacing:3px}
 </style>
 </head>
 <body>
@@ -147,6 +163,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);
 <div id="zone"></div>
 <div id="toasts"></div>
 <div id="flash"><div class="ring"></div><span id="flashText"></span></div>
+<div id="popdim"></div>
+<div id="itempop"><img id="itempopIcon" alt=""><div id="itempopName"></div><div id="itempopKind"></div></div>
 <div id="ammo"></div>
 <div id="xpwrap"><span id="xplabel"></span><div class="bar"><div id="xpfill"></div></div><span id="xpnum"></span></div>
 <div id="btns">
@@ -154,6 +172,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);
   <button class="hbtn" id="bEquip" aria-label="Equipment">⚔️</button>
   <button class="hbtn" id="bSkills" aria-label="Skills">📖</button>
   <button class="hbtn" id="bQuests" aria-label="Quests">📜</button>
+  <button class="hbtn" id="bBestiary" aria-label="Bestiary">🐾</button>
   <button class="hbtn" id="bMap" aria-label="Map">🗺️</button>
   <button class="hbtn" id="bTravel" aria-label="Travel">🏠</button>
   <button class="hbtn" id="bGear" aria-label="Settings">⚙️</button>

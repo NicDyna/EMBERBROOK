@@ -161,15 +161,23 @@ function findTarget(){
 
 /* ---------------- ground drops ---------------- */
 const DROP_TTL=90000;
-function spawnDrop(map,x,y,payload){ // payload {gold?, items?:[{id,qty}|{gear}]}
+/* collection log: credit `amt` of `key` to creature `src`. No-op when untagged —
+   player-dropped / quest / gravestone loot carries no source creature. */
+function bestiaryCredit(src,key,amt){
+  if(!src||!key||amt<=0)return;
+  const b=P.bestiary||(P.bestiary={}),e=b[src]||(b[src]={});
+  e[key]=(e[key]||0)+amt;
+}
+function spawnDrop(map,x,y,payload){ // payload {gold?, items?:[{id,qty}|{gear}], src?}
   let d=dropAt(map,x,y);
   if(!d){d={x,y,gold:0,items:[],ts:T,grave:false};world[map].drops.push(d);}
   d.ts=T;
-  if(payload.gold)d.gold+=payload.gold;
+  const src=payload.src;
+  if(payload.gold){d.gold+=payload.gold;if(src)d.goldSrc=src;}
   if(payload.items)for(const it of payload.items){
-    if(it.gear){d.items.push({gear:it.gear});continue;}
+    if(it.gear){d.items.push({gear:it.gear,src});continue;}
     const ex=d.items.find(s=>s.id===it.id&&!s.gear);
-    if(ex)ex.qty+=it.qty;else d.items.push({id:it.id,qty:it.qty});
+    if(ex){ex.qty+=it.qty;if(src)ex.src=src;}else d.items.push({id:it.id,qty:it.qty,src});
   }
   return d;
 }
@@ -179,20 +187,20 @@ function bestRarityOf(d){
 }
 function pickupDrop(d){
   const W=world[P.map];
-  if(d.gold>0){addGold(d.gold);floater(P.px+16,P.py-10,'+'+d.gold+'g','#e8b64c');sfx('coin');d.gold=0;}
+  if(d.gold>0){addGold(d.gold);floater(P.px+16,P.py-10,'+'+d.gold+'g','#e8b64c');sfx('coin');
+    bestiaryCredit(d.goldSrc,'gold',d.gold);d.gold=0;}
   const remain=[];
   for(const it of d.items){
     if(it.gear){
       if(addGear(it.gear)){
-        const nm=gearName(it.gear);
-        toast('+ '+nm,(it.gear.r||0)>=2?'gold':'drop');
-        if((it.gear.r||0)>=3){sfx('rare');
-          P.stats.bestDrop=nm;
-          if(it.gear.r>=4){P.stats.legendaries++;levelFlash((it.gear.r===5?'UNIQUE! ':'LEGENDARY! ')+nm);}
-        }else sfx('loot');
+        const nm=gearName(it.gear),r=it.gear.r||0;
+        bestiaryCredit(it.src,it.gear.id.slice(0,2)==='u_'?it.gear.id:'gear',1);
+        if(r>=3){itemPopup(it.gear);P.stats.bestDrop=nm;if(r>=4)P.stats.legendaries++;}
+        else{toast('+ '+nm,r>=2?'gold':'drop');sfx('loot');}
       }else{remain.push(it);toast('Inventory full','bad');}
     }else{
-      if(addItem(it.id,it.qty)){toast('+'+it.qty+' '+ITEMS[it.id].name,'drop');sfx('loot');}
+      if(addItem(it.id,it.qty)){bestiaryCredit(it.src,it.id,it.qty);
+        toast('+'+it.qty+' '+ITEMS[it.id].name,'drop');sfx('loot');}
       else{remain.push(it);toast('Inventory full','bad');}
     }
   }
@@ -202,6 +210,32 @@ function pickupDrop(d){
     W.drops.splice(W.drops.indexOf(d),1);
   }
   save();
+}
+/* selective pickup for the long-tap floor menu: take ONE entry ('gold' or a
+   specific item-entry object). Returns true | 'full' | false. */
+function pickupOne(d,spec){
+  const W=world[P.map];
+  if(spec==='gold'){
+    if(d.gold<=0)return false;
+    addGold(d.gold);floater(P.px+16,P.py-10,'+'+d.gold+'g','#e8b64c');sfx('coin');
+    bestiaryCredit(d.goldSrc,'gold',d.gold);d.gold=0;
+  }else{
+    const idx=d.items.indexOf(spec);if(idx<0)return false;
+    const it=spec;
+    if(it.gear){
+      if(!addGear(it.gear))return 'full';
+      const nm=gearName(it.gear),r=it.gear.r||0;
+      bestiaryCredit(it.src,it.gear.id.slice(0,2)==='u_'?it.gear.id:'gear',1);
+      if(r>=3){itemPopup(it.gear);P.stats.bestDrop=nm;if(r>=4)P.stats.legendaries++;}
+      else{toast('+ '+nm,r>=2?'gold':'drop');sfx('loot');}
+    }else{
+      if(!addItem(it.id,it.qty))return 'full';
+      bestiaryCredit(it.src,it.id,it.qty);toast('+'+it.qty+' '+ITEMS[it.id].name,'drop');sfx('loot');
+    }
+    d.items.splice(idx,1);
+  }
+  if(!d.items.length&&d.gold<=0){if(d.grave)P.grave=null;W.drops.splice(W.drops.indexOf(d),1);}
+  save();return true;
 }
 
 /* ---------------- loot generation ---------------- */
@@ -257,7 +291,11 @@ function doAction(){
     return;
   }
   if(P.action.kind==='loot'){
-    if(P.tx===t.x&&P.ty===t.y){pickupDrop(t);P.action=null;}
+    if(P.tx===t.x&&P.ty===t.y){
+      if(P.action.one){if(pickupOne(t,P.action.one)==='full')toast('Inventory full!','bad');}
+      else pickupDrop(t);
+      P.action=null;
+    }
     else if(!P.path.length&&!P.moving){routeToTarget(t.x,t.y,false);
       if(!P.path.length)P.action=null;}
     return;
@@ -334,11 +372,12 @@ function killMob(m){
   const d=MOBS[m.type];
   m.alive=false;m.aggro=false;m.respawnAt=T+(d.respawn||9000);
   gainXp(trainSkill(),d.xp);
-  const loot=rollLoot(m);
+  const loot=rollLoot(m);loot.src=m.type; /* tag for the bestiary */
   spawnDrop(P.map,m.tx,m.ty,loot);
   sfx('kill');
   spawnParticles(m.px+16,m.py+10,d.boss?'#ffcf5a':'#e8b070',d.boss?22:12,d.boss?2.2:1.4);
   P.stats.kills++;
+  (P.stats.mobKills||(P.stats.mobKills={}))[m.type]=(P.stats.mobKills[m.type]||0)+1;
   if(d.boss){
     P.stats.bossKills[m.type]=(P.stats.bossKills[m.type]||0)+1;
     levelFlash(d.name+' defeated!');shake(6);

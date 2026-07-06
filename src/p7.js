@@ -162,6 +162,48 @@ function openMonument(){
   openPanel('Town Monument',h);
 }
 
+/* ---------------- bestiary (collection log) ----------------
+   Every creature's full drop list; each drop is a silhouette until first
+   obtained, then shows its icon + cumulative amount received (see p5). */
+function creatureDrops(type){
+  const d=MOBS[type],out=[],seen=new Set();
+  const add=(key,kind,label)=>{if(!seen.has(key)){seen.add(key);out.push({key,kind,label});}};
+  let hasGear=false;
+  for(const e of d.loot){
+    if(e.gold)add('gold','gold','Gold');
+    else if(e.item)add(e.item,'item',ITEMS[e.item]?ITEMS[e.item].name:e.item);
+    else if(e.gear)hasGear=true;
+  }
+  if(hasGear)add('gear','gear','Equipment');
+  if(d.unique&&GEAR[d.unique])add(d.unique,'unique',GEAR[d.unique].name);
+  return out;
+}
+function bestiarySlot(dr,n){
+  if(n<=0)return '<div class="slot empty" title="???" style="font-weight:700;color:var(--dim)">?</div>';
+  const qty=n>9999?fmtXp(n):n;
+  const inner=dr.kind==='gear'?'<span style="font-size:19px">⚔️</span>'
+    :'<img src="'+iconURL(dr.kind==='gold'?'gold':dr.key)+'" alt="">';
+  return '<div class="slot" title="'+esc(dr.label)+'">'+inner+'<span class="qty">'+qty+'</span></div>';
+}
+function openBestiary(){
+  let h='',lastCat='',totalGot=0,totalAll=0;
+  for(const type in MOBS){
+    const d=MOBS[type],drops=creatureDrops(type),rec=(P.bestiary&&P.bestiary[type])||{};
+    const got=drops.filter(dr=>(rec[dr.key]||0)>0).length;
+    totalGot+=got;totalAll+=drops.length;
+    const cat=d.boss?'Bosses':d.semi?'Dungeon Elites':'Creatures';
+    if(cat!==lastCat){h+='<div class="sect">'+cat+'</div>';lastCat=cat;}
+    const kills=(P.stats.mobKills&&P.stats.mobKills[type])||0;
+    const done=drops.length>0&&got===drops.length;
+    h+='<div class="qrow" style="flex-direction:column;align-items:stretch;gap:6px">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center">'+
+      '<span>'+esc(d.name)+(done?' <span class="tag done">✓</span>':'')+'</span>'+
+      '<span class="tag'+(done?' ready':'')+'">'+got+'/'+drops.length+(kills?' · '+kills+' slain':'')+'</span></div>'+
+      '<div class="grid small" style="margin:0">'+drops.map(dr=>bestiarySlot(dr,rec[dr.key]||0)).join('')+'</div></div>';
+  }
+  openPanel('Bestiary — '+totalGot+'/'+totalAll+' logged',h);
+}
+
 /* ---------------- bank ---------------- */
 function openBank(){
   let h='<div class="sect">Your bag — tap to deposit</div><div class="grid small">';
@@ -371,6 +413,53 @@ function addOpt(container,label,fn){
   b.addEventListener('click',fn);container.appendChild(b);
 }
 
+/* ---------------- floor-item menu (long-tap a ground pile) ----------------
+   Lists everything on a tile; take one, take all, and swap-when-full. */
+let floorDrop=null, swapPending=null;
+function floorEntryRow(icon,rim,label,arg){
+  return '<div class="qrow"><span><img class="mini" src="'+icon+'"'+rim+'> '+label+'</span>'+
+    '<button class="btn small" data-act="takeone" data-arg="'+arg+'">Take</button></div>';
+}
+function openFloorMenu(d){
+  if(!d||(!d.items.length&&d.gold<=0)){closePanel();floorDrop=null;return;}
+  floorDrop=d;swapPending=null;
+  const far=!(P.tx===d.x&&P.ty===d.y);
+  let h='<div class="hint">'+(far?'Tap an item to walk over and grab just that one.':'Tap an item to grab it.')+'</div>';
+  if(d.gold>0)h+=floorEntryRow(iconURL('gold'),'',d.gold+' gold','gold');
+  d.items.forEach((it,i)=>{
+    const label=it.gear?esc(gearName(it.gear)):esc(ITEMS[it.id].name)+(it.qty>1?' × '+it.qty:'');
+    const rim=it.gear?' style="box-shadow:inset 0 0 0 2px '+gearColor(it.gear)+'55"':'';
+    h+=floorEntryRow(iconURL(it.gear?it.gear.id:it.id),rim,label,''+i);
+  });
+  h+='<button class="btn" data-act="takeall">Take everything</button>';
+  openPanel('On the ground',h);
+}
+function floorTake(spec){
+  const d=floorDrop;if(!d)return;
+  if(spec==='all'){
+    if(P.tx===d.x&&P.ty===d.y)pickupDrop(d);else setLoot(d);
+    closePanel();floorDrop=null;return;
+  }
+  const entry=spec==='gold'?'gold':d.items[+spec];
+  if(!entry){openFloorMenu(d);return;}
+  if(P.tx===d.x&&P.ty===d.y){
+    if(pickupOne(d,entry)==='full')openSwapMenu(d,entry);
+    else openFloorMenu(d); /* refresh remaining / auto-close if empty */
+  }else{
+    P.action={kind:'loot',x:d.x,y:d.y,one:entry};
+    routeToTarget(d.x,d.y,false);closePanel();floorDrop=null;
+  }
+}
+function openSwapMenu(d,entry){
+  const want=entry==='gold'?'gold':(entry.gear?gearName(entry.gear):ITEMS[entry.id].name);
+  swapPending={d,entry};
+  let h='<div class="sect">Bag full — drop something to make room for '+esc(want)+'</div><div class="grid small">';
+  P.inv.forEach((s,i)=>h+=slotHtml(s,i,'swapdrop'));
+  if(!P.inv.length)h+='<div class="hint" style="grid-column:1/-1">Bag is empty</div>';
+  h+='</div><button class="btn" data-act="floorback">Cancel</button>';
+  openPanel('Make room',h);
+}
+
 /* ---------------- panel action delegation ---------------- */
 function bindUI(){
 $('pclose').addEventListener('click',closePanel);
@@ -474,11 +563,22 @@ $('pbody').addEventListener('click',ev=>{
   }
   else if(act==='reset'){if(confirm('Reset Emberbrook?\n\nThis deletes your saved character and starts a brand-new game in the current world. This cannot be undone.'))resetSave();}
   else if(act==='warp'){warpTo(arg);if(P.map===arg)closePanel();else openTravel();}
+  else if(act==='takeone'){floorTake(arg);}
+  else if(act==='takeall'){floorTake('all');}
+  else if(act==='swapdrop'){
+    const i=+arg,s=P.inv[i];if(!s||!swapPending)return;
+    const dd=swapPending.d,entry=swapPending.entry;swapPending=null;
+    P.inv.splice(i,1);
+    spawnDrop(P.map,P.tx,P.ty,s.gear?{items:[{gear:s.gear}]}:{items:[{id:s.id,qty:s.qty}]});
+    pickupOne(dd,entry);openFloorMenu(dd);
+  }
+  else if(act==='floorback'){openFloorMenu(floorDrop);}
 });
 $('bInv').addEventListener('click',()=>{ensureAudio();openInventory();});
 $('bEquip').addEventListener('click',()=>{ensureAudio();openEquipment();});
 $('bSkills').addEventListener('click',()=>{ensureAudio();openSkills();});
 $('bQuests').addEventListener('click',()=>{ensureAudio();openQuests();});
+{const bb=$('bBestiary');if(bb)bb.addEventListener('click',()=>{ensureAudio();openBestiary();});}
 $('bMap').addEventListener('click',()=>{ensureAudio();toggleMinimap();});
 $('minimap').addEventListener('click',()=>{minimapOn=false;$('minimap').classList.remove('open');});
 $('bGear').addEventListener('click',()=>{ensureAudio();openSettings();});
