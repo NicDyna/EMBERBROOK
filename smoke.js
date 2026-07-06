@@ -5,7 +5,7 @@ const fs=require('fs');
 const {JSDOM}=require('jsdom');
 let html=fs.readFileSync(__dirname+'/static/index.html','utf8');
 const game=fs.readFileSync(__dirname+'/static/game.js','utf8');
-html=html.replace('<script src="/game.js"></script>','<script>'+game+'</script>');
+html=html.replace(/<script src="\/game\.js[^"]*"><\/script>/,'<script>'+game+'</script>');
 function ctxStub(){
   const target={canvas:null};
   return new Proxy(target,{
