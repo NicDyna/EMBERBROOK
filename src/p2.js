@@ -8,14 +8,24 @@
      each region holds a Dungeon (semi-boss + boss, the best loot). */
 
 /* ---------------- gatherable resources ----------------
-   Overworld gathering. Y/Z are the high-tier biome nodes (mountains/desert). */
+   RS-style tiered ladders for both skills. `hp` is now the node's CHARGE count:
+   how many items it yields before depleting & respawning. Low-tier = 1 (chop & go),
+   high-tier = 3–5 (the efficient deep-zone farm). Higher tiers also pay more xp. */
 const RES={
-  T:{name:'Tree',skill:'woodcutting',lvl:1,xp:12,item:'logs',time:2200,respawn:6000,hp:3},
-  O:{name:'Oak',skill:'woodcutting',lvl:5,xp:26,item:'oak_logs',time:2800,respawn:9000,hp:4},
-  Y:{name:'Frostpine',skill:'woodcutting',lvl:15,xp:44,item:'oak_logs',time:3200,respawn:11000,hp:5},
-  C:{name:'Copper Rock',skill:'mining',lvl:1,xp:14,item:'copper_ore',time:2400,respawn:7000,hp:3},
-  I:{name:'Iron Rock',skill:'mining',lvl:8,xp:30,item:'iron_ore',time:3000,respawn:10000,hp:4},
-  Z:{name:'Crystal Vein',skill:'mining',lvl:18,xp:58,item:'gem',time:3600,respawn:15000,hp:5},
+  /* woodcutting */
+  T:{name:'Tree',      skill:'woodcutting',lvl:1, xp:12, item:'logs',      time:2200,respawn:6000, hp:1},
+  O:{name:'Oak',       skill:'woodcutting',lvl:5, xp:26, item:'oak_logs',  time:2800,respawn:9000, hp:2},
+  Y:{name:'Frostpine', skill:'woodcutting',lvl:15,xp:44, item:'oak_logs',  time:3200,respawn:11000,hp:2},
+  J:{name:'Maple',     skill:'woodcutting',lvl:30,xp:86, item:'maple_logs',time:3600,respawn:14000,hp:3},
+  L:{name:'Yew',       skill:'woodcutting',lvl:45,xp:150,item:'yew_logs',  time:4200,respawn:20000,hp:4},
+  /* mining */
+  C:{name:'Copper Rock', skill:'mining',lvl:1, xp:14, item:'copper_ore', time:2400,respawn:7000, hp:1},
+  I:{name:'Iron Rock',   skill:'mining',lvl:8, xp:30, item:'iron_ore',   time:3000,respawn:10000,hp:2},
+  Z:{name:'Crystal Vein',skill:'mining',lvl:18,xp:58, item:'gem',        time:3600,respawn:15000,hp:2},
+  A:{name:'Coal Seam',   skill:'mining',lvl:20,xp:64, item:'coal',       time:3400,respawn:13000,hp:3},
+  e:{name:'Mithril Vein',skill:'mining',lvl:30,xp:96, item:'mithril_ore',time:3800,respawn:16000,hp:3},
+  u:{name:'Adamant Vein',skill:'mining',lvl:40,xp:150,item:'adamant_ore',time:4200,respawn:20000,hp:4},
+  j:{name:'Runite Vein', skill:'mining',lvl:50,xp:230,item:'runite_ore', time:4800,respawn:26000,hp:5},
 };
 
 /* ---------------- loot table helpers ----------------
@@ -278,18 +288,22 @@ const BLOCKED=new Set(['X','R','W','F','#','Q','U','S','~','H','B','K','k','V','
   const RW=60,RH=45,RCx=30,DGx=14,DGy=14; /* region size, gate col, dungeon mouth */
   function mkRng(seed){let s=seed>>>0;return()=>{s=(s+0x6D2B79F5)>>>0;
     let x=Math.imul(s^s>>>15,1|s);x=(x+Math.imul(x^x>>>7,61|x))^x;return((x^x>>>14)>>>0)/4294967296;};}
+  /* res entries are [char, count, band] — 'safe' nodes cluster in the calm belt
+     near the north gate, 'deep' (higher-tier) nodes in the mob-dense far end.
+     Each region's deep zone stocks the next tier up, so you skill AND fight to
+     climb the ladder (danger-zoned maps, §2/§3 of DESIGN-v3). */
   const SPECS=[
    {id:'forest',ground:'.',edge:'F',north:'town',south:'mountains',dungeon:'forest_dungeon',
-    res:[['T',34],['O',12],['C',8]],decor:[['X',6]],water:2,
+    res:[['T',24,'safe'],['C',8,'safe'],['O',12,'deep'],['I',6,'deep']],decor:[['X',6]],water:2,
     mobs:{spider:9,boar:6,bandit:5}},
    {id:'mountains',ground:'s',edge:'V',north:'forest',south:'plains',dungeon:'mountains_dungeon',
-    res:[['Y',20],['I',10],['Z',6]],decor:[['X',34]],water:0,
+    res:[['Y',14,'safe'],['I',8,'safe'],['Z',5,'deep'],['A',7,'deep'],['e',5,'deep']],decor:[['X',34]],water:0,
     mobs:{frost_wolf:8,ice_sprite:6,snow_troll:5}},
    {id:'plains',ground:'a',edge:'X',north:'mountains',south:'desert',dungeon:'plains_dungeon',
-    res:[['T',14],['I',8]],decor:[['X',10]],water:3,
+    res:[['Y',10,'safe'],['A',7,'safe'],['J',8,'deep'],['e',5,'deep'],['u',5,'deep']],decor:[['X',10]],water:3,
     mobs:{steppe_lion:8,war_hawk:6,nomad:5}},
    {id:'desert',ground:'d',edge:'N',north:'plains',south:null,dungeon:'desert_dungeon',
-    res:[['Z',9]],decor:[['k',18],['X',12]],water:2,
+    res:[['J',8,'safe'],['u',6,'safe'],['L',6,'deep'],['j',5,'deep'],['Z',5,'deep']],decor:[['k',18],['X',12]],water:2,
     mobs:{scorpion:8,sand_wraith:6,dune_raider:5}},
   ];
   const DUNG={
@@ -311,19 +325,24 @@ const BLOCKED=new Set(['X','R','W','F','#','Q','U','S','~','H','B','K','k','V','
     /* reserve gates, dungeon mouth + a clear central corridor */
     reserve(RCx,1,2);reserve(RCx,RH-2,2);reserve(DGx,DGy,2);
     for(let y=1;y<RH-1;y++)reserved.add(key(RCx,y));
-    const openTile=()=>{ /* random interior ground tile, not reserved */
-      for(let tries=0;tries<40;tries++){
-        const x=1+Math.floor(rng()*(RW-2)),y=1+Math.floor(rng()*(RH-2));
-        if(g[y][x]===spec.ground&&!reserved.has(key(x,y)))return[x,y];
+    /* random interior ground tile in the row band [yLo,yHi], not reserved */
+    const openTile=(yLo,yHi)=>{
+      yLo=yLo||1;yHi=yHi||(RH-2);
+      for(let tries=0;tries<50;tries++){
+        const x=1+Math.floor(rng()*(RW-2)),y=yLo+Math.floor(rng()*(yHi-yLo+1));
+        if(g[y]&&g[y][x]===spec.ground&&!reserved.has(key(x,y)))return[x,y];
       }return null;};
+    /* row bands: safe skilling belt up north, contested deep zone down south */
+    const SAFE=[2,16], DEEP=[18,RH-2], MOBLO=15;
     /* water pools (small, blocking via '~') */
     for(let i=0;i<spec.water;i++){const p=openTile();if(!p)continue;
       for(let j=0;j<2;j++)for(let k=0;k<2;k++)if(g[p[1]+j]&&g[p[1]+j][p[0]+k]===spec.ground)g[p[1]+j][p[0]+k]='~';}
-    /* decor (blocking) then resources */
+    /* decor (blocking) then resources — resources banded by safe/deep */
     for(const[ch,n]of spec.decor)for(let i=0;i<n;i++){const p=openTile();if(p)g[p[1]][p[0]]=ch;}
-    for(const[ch,n]of spec.res)for(let i=0;i<n;i++){const p=openTile();if(p){g[p[1]][p[0]]=ch;reserved.add(key(p[0],p[1]));}}
-    /* mobs on open ground */
-    for(const t in spec.mobs)for(let i=0;i<spec.mobs[t];i++){const p=openTile();if(p){mobs.push({t,x:p[0],y:p[1]});reserved.add(key(p[0],p[1]));}}
+    for(const[ch,n,band]of spec.res){const[yLo,yHi]=band==='deep'?DEEP:SAFE;
+      for(let i=0;i<n;i++){const p=openTile(yLo,yHi);if(p){g[p[1]][p[0]]=ch;reserved.add(key(p[0],p[1]));}}}
+    /* mobs cluster in the deep zone, leaving the northern skilling belt calm */
+    for(const t in spec.mobs)for(let i=0;i<spec.mobs[t];i++){const p=openTile(MOBLO,RH-2);if(p){mobs.push({t,x:p[0],y:p[1]});reserved.add(key(p[0],p[1]));}}
     /* gates + dungeon mouth (force-clear their tiles + approaches) */
     g[0][RCx]='E';g[1][RCx]=spec.ground;
     const exits=[];
@@ -372,7 +391,8 @@ function buildWorld(){
     const grid=m.rows.map(r=>r.split(''));
     const res=[],mobs=[];
     grid.forEach((row,y)=>row.forEach((ch,x)=>{
-      if(RES[ch]) res.push({id:id+':'+x+':'+y,type:ch,x,y,alive:true,respawnAt:0});
+      if(RES[ch]) res.push({id:id+':'+x+':'+y,type:ch,x,y,alive:true,respawnAt:0,
+        charges:RES[ch].hp||1}); /* hp = yield charges before depletion */
     }));
     m.mobs.forEach((s,i)=>{
       const d=MOBS[s.t];

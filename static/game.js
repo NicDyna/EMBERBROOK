@@ -5,7 +5,7 @@
    p1: constants, skills & XP, items, gear generation, rarity
    ============================================================ */
 'use strict';
-const TILE=32, INV_CAP=20, MAX_LVL=50, SAVE_VERSION=2;
+const TILE=32, INV_CAP=20, MAX_LVL=50, SAVE_VERSION=3;
 const $=id=>document.getElementById(id);
 const rand=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
 const clamp=(v,a,b)=>Math.max(a,Math.min(v,b));
@@ -27,9 +27,13 @@ const SKILLS={
   magic:      {name:'Magic',      color:'#9b7fd1', icon:'staff'},
   woodcutting:{name:'Woodcutting',color:'#8a9a5b', icon:'axe'},
   mining:     {name:'Mining',     color:'#a08c78', icon:'pick'},
+  crafting:   {name:'Crafting',   color:'#c98b50', icon:'hammer'},
 };
-const SKILL_ORDER=['attack','strength','defence','ranged','magic','woodcutting','mining'];
-const xpAt=l=>Math.floor(45*Math.pow(l-1,1.8));
+const SKILL_ORDER=['attack','strength','defence','ranged','magic','woodcutting','mining','crafting'];
+/* XP curve (v3): steepened from 45·(l-1)^1.8 so maxing is a long ACTIVE grind
+   — total XP to 50 roughly doubled (~50k → ~99k). Higher-tier nodes/mobs pay
+   proportionally more. Revert this one line to restore the old, faster pacing. */
+const xpAt=l=>Math.floor(50*Math.pow(l-1,1.95));
 /* Level is capped at 50; XP itself keeps counting (overflow). */
 function lvlFor(xp){let l=1;while(l<MAX_LVL&&xp>=xpAt(l+1))l++;return l;}
 
@@ -145,6 +149,7 @@ const CAPES={
   cape_magic:{skill:'magic',name:'Magic Cape',color:'#9b7fd1',perk:'10% chance to save runes',price:5000},
   cape_woodcutting:{skill:'woodcutting',name:'Woodcutting Cape',color:'#8a9a5b',perk:'+10% chop speed',price:5000},
   cape_mining:{skill:'mining',name:'Mining Cape',color:'#a08c78',perk:'+10% mine speed',price:5000},
+  cape_crafting:{skill:'crafting',name:'Crafting Cape',color:'#c98b50',perk:'10% chance to save materials',price:5000},
   cape_max:{skill:null,name:'Max Cape',color:'#f0c419',perk:'All cape perks combined',price:25000},
 };
 function capePerkActive(capeId){
@@ -155,7 +160,8 @@ function capePerkActive(capeId){
    (or Max Cape) or by any equipped unique. Effects:
    acc, meleedmg, dmgred, savearrow, saverune, chop, mine */
 const CAPE_EFFECT={cape_attack:'acc',cape_strength:'meleedmg',cape_defence:'dmgred',
-  cape_ranged:'savearrow',cape_magic:'saverune',cape_woodcutting:'chop',cape_mining:'mine'};
+  cape_ranged:'savearrow',cape_magic:'saverune',cape_woodcutting:'chop',cape_mining:'mine',
+  cape_crafting:'craftsave'};
 function perkActive(effect){
   const worn=P.gear.cape&&P.gear.cape.id;
   if(worn==='cape_max')return true;
@@ -168,8 +174,21 @@ function perkActive(effect){
 const ITEMS={
   logs:{name:'Logs',price:0,sell:3,stack:true},
   oak_logs:{name:'Oak Logs',price:0,sell:8,stack:true},
+  maple_logs:{name:'Maple Logs',price:0,sell:20,stack:true},
+  yew_logs:{name:'Yew Logs',price:0,sell:44,stack:true},
   copper_ore:{name:'Copper Ore',price:0,sell:5,stack:true},
   iron_ore:{name:'Iron Ore',price:0,sell:12,stack:true},
+  coal:{name:'Coal',price:0,sell:16,stack:true},
+  mithril_ore:{name:'Mithril Ore',price:0,sell:34,stack:true},
+  adamant_ore:{name:'Adamant Ore',price:0,sell:64,stack:true},
+  runite_ore:{name:'Runite Ore',price:0,sell:120,stack:true},
+  /* smithed bars — crafting products (sell for gold, feed base-gear smithing) */
+  bronze_bar:{name:'Bronze Bar',price:0,sell:14,stack:true},
+  iron_bar:{name:'Iron Bar',price:0,sell:28,stack:true},
+  steel_bar:{name:'Steel Bar',price:0,sell:60,stack:true},
+  mithril_bar:{name:'Mithril Bar',price:0,sell:120,stack:true},
+  adamant_bar:{name:'Adamant Bar',price:0,sell:230,stack:true},
+  rune_bar:{name:'Runite Bar',price:0,sell:440,stack:true},
   bone:{name:'Bones',price:0,sell:2,stack:true},
   wolf_pelt:{name:'Wolf Pelt',price:0,sell:9,stack:true},
   ancient_dust:{name:'Ancient Dust',price:0,sell:18,stack:true},
@@ -196,6 +215,42 @@ const TOOLS={
   iron_pick:{name:'Iron Pickaxe',slot:'pick',tier:2,speed:.7,price:120,icon:['pick','#b8c4cf']},
   steel_pick:{name:'Steel Pickaxe',slot:'pick',tier:3,speed:.55,price:600,icon:['pick','#8f9aa5']},
 };
+
+/* ---------------- crafting recipes (the base-item grind) ----------------
+   Leveled at the Forge (Smith Torvald). Three chains:
+     Smelting  — ore (+coal) → metal bar
+     Fletching — logs → arrows
+     Smithing  — bars → base melee gear (Common, r=0; sell or wield)
+   Recipe: {name,cat,lvl,xp, in:{item:qty,...}, out:{item:qty} | gear:'g_..id'}.
+   'lvl' gates on the Crafting skill; higher tiers pay proportionally more xp. */
+const BAR_BY_TIER=['bronze_bar','iron_bar','steel_bar','mithril_bar','adamant_bar','rune_bar'];
+const CRAFT_LVL_BY_TIER=[1,10,20,30,40,50];
+const SMELT_XP_BY_TIER=[12,20,32,50,75,110];
+const SLOT_BARS={weapon:2,shield:3,helmet:1,body:5,legs:3};
+const RECIPES={
+  /* --- Smelting: 1 ore (+coal from steel up) → 1 bar --- */
+  bronze_bar:{name:'Bronze Bar',cat:'Smelting',lvl:1, xp:12, in:{copper_ore:1},           out:{bronze_bar:1}},
+  iron_bar:  {name:'Iron Bar',  cat:'Smelting',lvl:10,xp:20, in:{iron_ore:1},              out:{iron_bar:1}},
+  steel_bar: {name:'Steel Bar', cat:'Smelting',lvl:20,xp:32, in:{iron_ore:1,coal:1},       out:{steel_bar:1}},
+  mithril_bar:{name:'Mithril Bar',cat:'Smelting',lvl:30,xp:50,in:{mithril_ore:1,coal:2},   out:{mithril_bar:1}},
+  adamant_bar:{name:'Adamant Bar',cat:'Smelting',lvl:40,xp:75,in:{adamant_ore:1,coal:3},   out:{adamant_bar:1}},
+  rune_bar:  {name:'Runite Bar',cat:'Smelting',lvl:50,xp:110,in:{runite_ore:1,coal:4},      out:{rune_bar:1}},
+  /* --- Fletching: logs → arrows --- */
+  arrows:      {name:'Arrows ×15',    cat:'Fletching',lvl:1, xp:8,  in:{logs:1},       out:{arrows:15}},
+  arrows_oak:  {name:'Arrows ×30',    cat:'Fletching',lvl:15,xp:18, in:{oak_logs:1},   out:{arrows:30}},
+  arrows_maple:{name:'Arrows ×60',    cat:'Fletching',lvl:35,xp:40, in:{maple_logs:1}, out:{arrows:60}},
+};
+/* --- Smithing: generate melee-line base gear from bars (buildGear ran above) --- */
+(function buildGearRecipes(){
+  for(let t=1;t<=6;t++){
+    const bar=BAR_BY_TIER[t-1], lvl=CRAFT_LVL_BY_TIER[t-1], sx=SMELT_XP_BY_TIER[t-1];
+    for(const slot in LINE_DEFS.m.slots){
+      const gid='g_m_'+t+'_'+slot, n=SLOT_BARS[slot];
+      RECIPES['craft_'+gid]={name:'Smith '+GEAR[gid].name,cat:'Smithing',lvl,
+        xp:Math.round(n*sx*0.9), in:{[bar]:n}, gear:gid};
+    }
+  }
+})();
 /* p2: world data — resources, biome mobs (styles + loot tables), dungeon
        semi-bosses & bosses, NPCs, quests, dailies, the walled town + four
        huge biome regions (Forest→Mountains→Plains→Desert) each with a
@@ -206,14 +261,24 @@ const TOOLS={
      each region holds a Dungeon (semi-boss + boss, the best loot). */
 
 /* ---------------- gatherable resources ----------------
-   Overworld gathering. Y/Z are the high-tier biome nodes (mountains/desert). */
+   RS-style tiered ladders for both skills. `hp` is now the node's CHARGE count:
+   how many items it yields before depleting & respawning. Low-tier = 1 (chop & go),
+   high-tier = 3–5 (the efficient deep-zone farm). Higher tiers also pay more xp. */
 const RES={
-  T:{name:'Tree',skill:'woodcutting',lvl:1,xp:12,item:'logs',time:2200,respawn:6000,hp:3},
-  O:{name:'Oak',skill:'woodcutting',lvl:5,xp:26,item:'oak_logs',time:2800,respawn:9000,hp:4},
-  Y:{name:'Frostpine',skill:'woodcutting',lvl:15,xp:44,item:'oak_logs',time:3200,respawn:11000,hp:5},
-  C:{name:'Copper Rock',skill:'mining',lvl:1,xp:14,item:'copper_ore',time:2400,respawn:7000,hp:3},
-  I:{name:'Iron Rock',skill:'mining',lvl:8,xp:30,item:'iron_ore',time:3000,respawn:10000,hp:4},
-  Z:{name:'Crystal Vein',skill:'mining',lvl:18,xp:58,item:'gem',time:3600,respawn:15000,hp:5},
+  /* woodcutting */
+  T:{name:'Tree',      skill:'woodcutting',lvl:1, xp:12, item:'logs',      time:2200,respawn:6000, hp:1},
+  O:{name:'Oak',       skill:'woodcutting',lvl:5, xp:26, item:'oak_logs',  time:2800,respawn:9000, hp:2},
+  Y:{name:'Frostpine', skill:'woodcutting',lvl:15,xp:44, item:'oak_logs',  time:3200,respawn:11000,hp:2},
+  J:{name:'Maple',     skill:'woodcutting',lvl:30,xp:86, item:'maple_logs',time:3600,respawn:14000,hp:3},
+  L:{name:'Yew',       skill:'woodcutting',lvl:45,xp:150,item:'yew_logs',  time:4200,respawn:20000,hp:4},
+  /* mining */
+  C:{name:'Copper Rock', skill:'mining',lvl:1, xp:14, item:'copper_ore', time:2400,respawn:7000, hp:1},
+  I:{name:'Iron Rock',   skill:'mining',lvl:8, xp:30, item:'iron_ore',   time:3000,respawn:10000,hp:2},
+  Z:{name:'Crystal Vein',skill:'mining',lvl:18,xp:58, item:'gem',        time:3600,respawn:15000,hp:2},
+  A:{name:'Coal Seam',   skill:'mining',lvl:20,xp:64, item:'coal',       time:3400,respawn:13000,hp:3},
+  e:{name:'Mithril Vein',skill:'mining',lvl:30,xp:96, item:'mithril_ore',time:3800,respawn:16000,hp:3},
+  u:{name:'Adamant Vein',skill:'mining',lvl:40,xp:150,item:'adamant_ore',time:4200,respawn:20000,hp:4},
+  j:{name:'Runite Vein', skill:'mining',lvl:50,xp:230,item:'runite_ore', time:4800,respawn:26000,hp:5},
 };
 
 /* ---------------- loot table helpers ----------------
@@ -476,18 +541,22 @@ const BLOCKED=new Set(['X','R','W','F','#','Q','U','S','~','H','B','K','k','V','
   const RW=60,RH=45,RCx=30,DGx=14,DGy=14; /* region size, gate col, dungeon mouth */
   function mkRng(seed){let s=seed>>>0;return()=>{s=(s+0x6D2B79F5)>>>0;
     let x=Math.imul(s^s>>>15,1|s);x=(x+Math.imul(x^x>>>7,61|x))^x;return((x^x>>>14)>>>0)/4294967296;};}
+  /* res entries are [char, count, band] — 'safe' nodes cluster in the calm belt
+     near the north gate, 'deep' (higher-tier) nodes in the mob-dense far end.
+     Each region's deep zone stocks the next tier up, so you skill AND fight to
+     climb the ladder (danger-zoned maps, §2/§3 of DESIGN-v3). */
   const SPECS=[
    {id:'forest',ground:'.',edge:'F',north:'town',south:'mountains',dungeon:'forest_dungeon',
-    res:[['T',34],['O',12],['C',8]],decor:[['X',6]],water:2,
+    res:[['T',24,'safe'],['C',8,'safe'],['O',12,'deep'],['I',6,'deep']],decor:[['X',6]],water:2,
     mobs:{spider:9,boar:6,bandit:5}},
    {id:'mountains',ground:'s',edge:'V',north:'forest',south:'plains',dungeon:'mountains_dungeon',
-    res:[['Y',20],['I',10],['Z',6]],decor:[['X',34]],water:0,
+    res:[['Y',14,'safe'],['I',8,'safe'],['Z',5,'deep'],['A',7,'deep'],['e',5,'deep']],decor:[['X',34]],water:0,
     mobs:{frost_wolf:8,ice_sprite:6,snow_troll:5}},
    {id:'plains',ground:'a',edge:'X',north:'mountains',south:'desert',dungeon:'plains_dungeon',
-    res:[['T',14],['I',8]],decor:[['X',10]],water:3,
+    res:[['Y',10,'safe'],['A',7,'safe'],['J',8,'deep'],['e',5,'deep'],['u',5,'deep']],decor:[['X',10]],water:3,
     mobs:{steppe_lion:8,war_hawk:6,nomad:5}},
    {id:'desert',ground:'d',edge:'N',north:'plains',south:null,dungeon:'desert_dungeon',
-    res:[['Z',9]],decor:[['k',18],['X',12]],water:2,
+    res:[['J',8,'safe'],['u',6,'safe'],['L',6,'deep'],['j',5,'deep'],['Z',5,'deep']],decor:[['k',18],['X',12]],water:2,
     mobs:{scorpion:8,sand_wraith:6,dune_raider:5}},
   ];
   const DUNG={
@@ -509,19 +578,24 @@ const BLOCKED=new Set(['X','R','W','F','#','Q','U','S','~','H','B','K','k','V','
     /* reserve gates, dungeon mouth + a clear central corridor */
     reserve(RCx,1,2);reserve(RCx,RH-2,2);reserve(DGx,DGy,2);
     for(let y=1;y<RH-1;y++)reserved.add(key(RCx,y));
-    const openTile=()=>{ /* random interior ground tile, not reserved */
-      for(let tries=0;tries<40;tries++){
-        const x=1+Math.floor(rng()*(RW-2)),y=1+Math.floor(rng()*(RH-2));
-        if(g[y][x]===spec.ground&&!reserved.has(key(x,y)))return[x,y];
+    /* random interior ground tile in the row band [yLo,yHi], not reserved */
+    const openTile=(yLo,yHi)=>{
+      yLo=yLo||1;yHi=yHi||(RH-2);
+      for(let tries=0;tries<50;tries++){
+        const x=1+Math.floor(rng()*(RW-2)),y=yLo+Math.floor(rng()*(yHi-yLo+1));
+        if(g[y]&&g[y][x]===spec.ground&&!reserved.has(key(x,y)))return[x,y];
       }return null;};
+    /* row bands: safe skilling belt up north, contested deep zone down south */
+    const SAFE=[2,16], DEEP=[18,RH-2], MOBLO=15;
     /* water pools (small, blocking via '~') */
     for(let i=0;i<spec.water;i++){const p=openTile();if(!p)continue;
       for(let j=0;j<2;j++)for(let k=0;k<2;k++)if(g[p[1]+j]&&g[p[1]+j][p[0]+k]===spec.ground)g[p[1]+j][p[0]+k]='~';}
-    /* decor (blocking) then resources */
+    /* decor (blocking) then resources — resources banded by safe/deep */
     for(const[ch,n]of spec.decor)for(let i=0;i<n;i++){const p=openTile();if(p)g[p[1]][p[0]]=ch;}
-    for(const[ch,n]of spec.res)for(let i=0;i<n;i++){const p=openTile();if(p){g[p[1]][p[0]]=ch;reserved.add(key(p[0],p[1]));}}
-    /* mobs on open ground */
-    for(const t in spec.mobs)for(let i=0;i<spec.mobs[t];i++){const p=openTile();if(p){mobs.push({t,x:p[0],y:p[1]});reserved.add(key(p[0],p[1]));}}
+    for(const[ch,n,band]of spec.res){const[yLo,yHi]=band==='deep'?DEEP:SAFE;
+      for(let i=0;i<n;i++){const p=openTile(yLo,yHi);if(p){g[p[1]][p[0]]=ch;reserved.add(key(p[0],p[1]));}}}
+    /* mobs cluster in the deep zone, leaving the northern skilling belt calm */
+    for(const t in spec.mobs)for(let i=0;i<spec.mobs[t];i++){const p=openTile(MOBLO,RH-2);if(p){mobs.push({t,x:p[0],y:p[1]});reserved.add(key(p[0],p[1]));}}
     /* gates + dungeon mouth (force-clear their tiles + approaches) */
     g[0][RCx]='E';g[1][RCx]=spec.ground;
     const exits=[];
@@ -570,7 +644,8 @@ function buildWorld(){
     const grid=m.rows.map(r=>r.split(''));
     const res=[],mobs=[];
     grid.forEach((row,y)=>row.forEach((ch,x)=>{
-      if(RES[ch]) res.push({id:id+':'+x+':'+y,type:ch,x,y,alive:true,respawnAt:0});
+      if(RES[ch]) res.push({id:id+':'+x+':'+y,type:ch,x,y,alive:true,respawnAt:0,
+        charges:RES[ch].hp||1}); /* hp = yield charges before depletion */
     }));
     m.mobs.forEach((s,i)=>{
       const d=MOBS[s.t];
@@ -627,7 +702,7 @@ function freshPlayer(){return{
   v:SAVE_VERSION,
   map:'town',tx:20,ty:17,px:20*TILE,py:17*TILE,facing:1,
   hp:14,
-  xp:{attack:0,strength:0,defence:0,ranged:0,magic:0,woodcutting:0,mining:0},
+  xp:{attack:0,strength:0,defence:0,ranged:0,magic:0,woodcutting:0,mining:0,crafting:0},
   style:'accurate', // melee training style: accurate|aggressive|defensive
   gold:0,
   inv:[],            // [{id,qty}] for stackables, [{gear:{id,r}}] for gear
@@ -822,6 +897,46 @@ function gainXp(skill,amount){
     sfx('level');
     if(after===MAX_LVL)toast(`${SKILLS[skill].name} mastered! Visit Master Aldric for your cape.`,'gold');
   }
+}
+
+/* ---------------- crafting (base items — the Crafting skill grind) ----------
+   A recipe consumes `in` materials and yields either a stackable `out` or a
+   `gear` piece (Common). Gated on the Crafting level; the Crafting cape's
+   'craftsave' perk gives a 10% chance to refund the materials. Returns how many
+   were actually crafted (0 = couldn't). */
+function craftReq(r){ /* is every input present at least once? */
+  for(const id in r.in)if(invCount(id)<r.in[id])return false;
+  return true;
+}
+function craftMax(r){ /* how many times this recipe can currently be made */
+  let n=Infinity;
+  for(const id in r.in)n=Math.min(n,Math.floor(invCount(id)/r.in[id]));
+  return n===Infinity?0:n;
+}
+function doCraft(recipeId,count){
+  const r=RECIPES[recipeId];if(!r)return 0;
+  if(lvl('crafting')<r.lvl){toast('Requires Crafting level '+r.lvl,'bad');return 0;}
+  let made=0;count=count||1;
+  for(let k=0;k<count;k++){
+    if(!craftReq(r)){if(made===0)toast('Not enough materials.','bad');break;}
+    /* space check: a gear piece or a NEW stack needs a free slot */
+    if(r.gear){if(P.inv.length>=INV_CAP){toast('Inventory full!','bad');break;}}
+    else{const outId=Object.keys(r.out)[0];
+      if(!invGet(outId)&&P.inv.length>=INV_CAP){toast('Inventory full!','bad');break;}}
+    /* consume inputs (craftsave perk may refund the whole batch of inputs) */
+    const saved=perkActive('craftsave')&&Math.random()<0.10;
+    if(!saved)for(const id in r.in)removeItem(id,r.in[id]);
+    /* produce output */
+    if(r.gear)addGear({id:r.gear,r:0});
+    else for(const id in r.out)addItem(id,r.out[id]);
+    gainXp('crafting',r.xp);
+    made++;
+  }
+  if(made){sfx('equip');
+    const label=r.gear?GEAR[r.gear].name:ITEMS[Object.keys(r.out)[0]].name;
+    toast('Crafted '+label+(made>1?' × '+made:''),'gold');
+    updateHUD();save();}
+  return made;
 }
 
 /* ---------------- quests ---------------- */
@@ -1249,6 +1364,21 @@ function buildSprites(){
     p(5,3,2,8,'#66e0ff');p(5,3,1,8,'#bfefff');
     p(8,5,2,7,'#7af0c9');p(8,5,1,5,'#c9fff0');
     p(3,7,2,4,'#9b7fd1');p(11,7,2,4,'#9b7fd1');});
+  /* higher-tier trees: recoloured canopies over the oak trunk */
+  const mkTree=(fol,folL,folD)=>mk(32,48,(g,p)=>{
+    p(6,16,4,8,'#4e3b29');p(5,22,6,2,'#42311f');
+    p(2,2,12,12,fol);p(0,6,16,6,fol);p(4,0,8,4,fol);
+    p(3,3,5,3,folL);p(10,6,4,3,folL);p(2,10,4,2,folD);p(7,4,2,2,folL);});
+  SPR.maple=mkTree('#7a4a24','#a8702f','#5c3618'); /* amber autumn maple */
+  SPR.yew=mkTree('#1e3a24','#2f5a34','#152a1a');   /* deep rich yew */
+  /* ore veins: rock body with a tier-coloured mineral fleck */
+  const mkOre=(fleck)=>mk(32,32,(g,p)=>{
+    p(3,6,10,8,'#4e4c4a');p(5,4,7,3,'#4e4c4a');p(2,9,12,4,'#44423f');
+    p(4,5,4,2,'#5b5956');p(6,8,2,2,fleck);p(10,10,2,2,fleck);p(4,11,2,1,fleck);p(9,6,2,2,fleck);});
+  SPR.coal=mkOre('#2b2b2b');
+  SPR.mithril_rock=mkOre('#6fb7ff');
+  SPR.adamant_rock=mkOre('#5f9e6e');
+  SPR.runite_rock=mkOre('#59c1c9');
 
   /* ---- player paper-doll (rebuilt whenever equipment changes) ---- */
   rebuildPlayerSprite();
@@ -1570,10 +1700,16 @@ function iconShape(p,shape,c){
     case'pie':p(4,7,8,4,c);p(3,7,10,1,shade(c,0.3));p(5,9,2,1,shade(c,-0.3));p(9,9,2,1,shade(c,-0.3));break;
     case'stew':p(4,7,8,5,'#8a6a42');p(4,7,8,1,'#a4855c');p(5,6,6,2,c);p(6,5,1,1,'#e8dcc3');p(9,5,1,1,'#e8dcc3');break;
     case'coin':p(5,5,6,6,c);p(6,6,4,4,shade(c,0.3));p(7,7,2,2,c);break;
+    case'bar':p(4,8,8,4,c);p(3,9,10,2,c);p(4,8,8,1,shade(c,0.4));p(3,11,10,1,shade(c,-0.3));p(5,9,2,1,shade(c,0.6));break;
   }
 }
 const ITEM_ICON={
-  logs:['logs','#8a6a42'],oak_logs:['logs','#5b4632'],copper_ore:['ore','#c47f3e'],
+  logs:['logs','#8a6a42'],oak_logs:['logs','#5b4632'],
+  maple_logs:['logs','#a8702f'],yew_logs:['logs','#2f5a34'],
+  copper_ore:['ore','#c47f3e'],
+  coal:['ore','#2b2b2b'],mithril_ore:['ore','#6fb7ff'],adamant_ore:['ore','#5f9e6e'],runite_ore:['ore','#59c1c9'],
+  bronze_bar:['bar','#a9714b'],iron_bar:['bar','#b8c4cf'],steel_bar:['bar','#8f9aa5'],
+  mithril_bar:['bar','#6fb7ff'],adamant_bar:['bar','#5f9e6e'],rune_bar:['bar','#59c1c9'],
   iron_ore:['ore','#9fb0bd'],bone:['bone','#d8d5c8'],wolf_pelt:['pelt','#8b8b8b'],
   ancient_dust:['dust','#b0a0e0'],swamp_herb:['herb','#7af0c9'],gem:['gem','#66e0ff'],
   spider_silk:['pelt','#d8d5e8'],thick_fur:['pelt','#b9c6d4'],lion_fang:['bone','#e6c48e'],scarab_shell:['gem','#6a8a4e'],
@@ -1923,9 +2059,12 @@ function doAction(){
       toast('+1 '+ITEMS[d.item].name,'drop');
       questEvent('gather',d.item);
       if(d.skill==='woodcutting')P.stats.chopped++;else P.stats.mined++;
+      /* node charges: keep working the same node until its charges run out */
+      t.charges=(t.charges!=null?t.charges:(d.hp||1))-1;
+      if(t.charges>0)return; /* still yields — stay on this node next tick */
       t.alive=false;t.respawnAt=T+d.respawn;
       const next=nearestRes(t.type,t.x,t.y);
-      if(next)setGather(next);else{P.action=null;toast('No more nearby. Tap another resource.');}
+      if(next)setGather(next);else{P.action=null;toast('Node depleted. Tap another resource.');}
     }
     return;
   }
@@ -2057,7 +2196,7 @@ function updateMobs(){
       }
     }
   }
-  for(const r of W.res)if(!r.alive&&T>=r.respawnAt)r.alive=true;
+  for(const r of W.res)if(!r.alive&&T>=r.respawnAt){r.alive=true;r.charges=RES[r.type].hp||1;}
 }
 /* townsfolk gently mill about near their post (gives them a walk cycle) */
 function updateNpcs(){
@@ -2122,6 +2261,9 @@ function update(dt){
 /* p6: rendering & HUD — camera, tile pass, ground drops (rarity glow),
        gravestone timer, projectiles, bosses drawn 2x, paper-doll player */
 const cv=$('cv'),ctx=cv.getContext('2d');
+/* resource node → sprite key (resolved against SPR at draw time, after buildSprites) */
+const TREE_SPR={O:'oak',Y:'pine',J:'maple',L:'yew'};
+const ROCK_SPR={I:'rock_i',Z:'crystal',A:'coal',e:'mithril_rock',u:'adamant_rock',j:'runite_rock'};
 let SCALE=2,VW=0,VH=0;
 function resize(){
   const dpr=Math.min(2,window.devicePixelRatio||1);
@@ -2227,10 +2369,10 @@ function draw(){
       const r=it.o,d=RES[r.type];
       if(d.skill==='woodcutting'){
         const sway=r.alive?Math.sin(T/900+r.x*1.3)*0.8:0; /* gentle wind */
-        const tspr=r.type==='O'?SPR.oak:r.type==='Y'?SPR.pine:SPR.tree;
+        const tspr=SPR[TREE_SPR[r.type]]||SPR.tree;
         ctx.drawImage(r.alive?tspr:SPR.stump,r.x*TILE+sway,r.y*TILE-(r.alive?16:0));
       }else{
-        const rspr=r.type==='I'?SPR.rock_i:r.type==='Z'?SPR.crystal:SPR.rock_c;
+        const rspr=SPR[ROCK_SPR[r.type]]||SPR.rock_c;
         ctx.drawImage(r.alive?rspr:SPR.rubble,r.x*TILE,r.y*TILE);
       }
     }else if(it.k==='m'){
@@ -2502,7 +2644,7 @@ function openSkills(){
       '<div class="xpnum">'+(l>=MAX_LVL?'MAX · '+fmtXp(P.xp[s])+' xp':cur+' / '+need+' xp')+'</div></div>';
   }
   h+='<div class="skillrow"><div class="skillname"><b>Total level</b></div><div class="skilllvl"><b>'+totalLevel()+'</b></div><div></div><div class="xpnum">'+(SKILL_ORDER.length*MAX_LVL)+' max</div></div>';
-  h+='<div class="hint">Unlocks — Woodcutting 5: Oaks · Mining 8: Iron · gear tiers at 1/5/15/25/35/45</div>';
+  h+='<div class="hint">Unlocks — WC 5/30/45: Oak·Maple·Yew · Mining 8/20/30/40/50: Iron·Coal·Mithril·Adamant·Runite · Crafting: smelt bars &amp; smith gear at the Forge</div>';
   openPanel('Skills',h);
 }
 
@@ -2710,6 +2852,37 @@ function openShop(){
   openPanel("Torvald's Forge — gold: "+P.gold,h);
 }
 
+/* ---------------- crafting station (recipe list at the Forge) ---------------- */
+let craftCat='Smelting';
+function openCraft(){
+  const cats=['Smelting','Fletching','Smithing'];
+  let h='<div class="stylerow">'+cats.map(c=>
+    '<button class="btn small'+(craftCat===c?' sel':'')+'" data-act="crafttab" data-arg="'+c+'">'+c+'</button>').join('')+'</div>';
+  h+='<div class="hint">Gather → craft base items → sell. Crafting level '+lvl('crafting')+'.</div>';
+  let any=false;
+  for(const id in RECIPES){
+    const r=RECIPES[id];if(r.cat!==craftCat)continue;any=true;
+    const outId=r.gear?r.gear:Object.keys(r.out)[0];
+    const outName=r.gear?GEAR[r.gear].name
+      :(r.out[outId]>1?ITEMS[outId].name+' × '+r.out[outId]:ITEMS[outId].name);
+    const locked=lvl('crafting')<r.lvl;
+    const inStr=Object.entries(r.in).map(([iid,q])=>{
+      const have=invCount(iid);
+      return '<span style="color:'+(have>=q?'var(--dim)':'#f0b0a5')+'">'+q+'× '+esc(ITEMS[iid].name)+'</span>';
+    }).join(' · ');
+    const maxN=locked?0:craftMax(r);
+    h+='<div class="qrow"><span><img class="mini" src="'+iconURL(outId)+'" alt=""> '+esc(outName)+
+      '<br><span class="hint">'+inStr+' · '+r.xp+' xp</span></span>';
+    if(locked)h+='<span class="tag locked">Crafting '+r.lvl+'</span>';
+    else h+='<span style="display:flex;gap:4px">'+
+      '<button class="btn small'+(maxN>0?'':' dim')+'" data-act="craft" data-arg="'+id+':1">Make</button>'+
+      (maxN>1?'<button class="btn small" data-act="craft" data-arg="'+id+':all">×'+maxN+'</button>':'')+'</span>';
+    h+='</div>';
+  }
+  if(!any)h+='<div class="hint">No recipes here yet.</div>';
+  openPanel('Forge — Crafting '+lvl('crafting'),h);
+}
+
 /* ---------------- Master Aldric (capes) ---------------- */
 function openCapes(){
   let h='<div class="sect">Capes of Accomplishment — 5,000g each at level 50</div>';
@@ -2811,6 +2984,7 @@ function openDialog(npc){
   }
   if(npc.role==='bank')addOpt(opts,'🏦 Open bank',()=>{closeDialog();openBank();});
   if(npc.role==='shop')addOpt(opts,'⚒ Trade',()=>{closeDialog();openShop();});
+  if(npc.role==='shop')addOpt(opts,'🔨 Craft',()=>{closeDialog();openCraft();});
   if(npc.role==='capes')addOpt(opts,'🎽 Capes of Accomplishment',()=>{closeDialog();openCapes();});
   addOpt(opts,'Farewell.',closeDialog);
   $('dialog').classList.add('open');
@@ -2901,6 +3075,12 @@ $('pbody').addEventListener('click',ev=>{
   else if(act==='withdraw'){const q=P.bank[arg]||0;if(q&&addItem(arg,q)){delete P.bank[arg];openBank();}else if(q)toast('Bag is full!');}
   else if(act==='withdrawgear'){const pc=P.bankGear[+arg];if(pc&&addGear(pc)){P.bankGear.splice(+arg,1);openBank();}else toast('Bag is full!');}
   else if(act==='shoptab'){shopTab=arg;openShop();}
+  else if(act==='crafttab'){craftCat=arg;openCraft();}
+  else if(act==='craft'){
+    const[rid,cnt]=arg.split(':');
+    const n=cnt==='all'?craftMax(RECIPES[rid]):+cnt;
+    if(n>0)doCraft(rid,n);openCraft();
+  }
   else if(act==='sell'){const s=P.inv[+arg];if(s&&ITEMS[s.id]){const g=ITEMS[s.id].sell*s.qty;P.inv.splice(+arg,1);addGold(g);sfx('coin');toast('Sold for '+g+'g','gold');openShop();}}
   else if(act==='sellgear'){const s=P.inv[+arg];if(s&&s.gear){const g=gearSellValue(s.gear);P.inv.splice(+arg,1);addGold(g);sfx('coin');toast('Sold '+gearName(s.gear)+' for '+g+'g','gold');openShop();}}
   else if(act==='bulksell'){
@@ -3135,9 +3315,10 @@ function boot(){
 }
 
 /* ---------------- debug handle ---------------- */
-window.EB={world,MAPS,ITEMS,TOOLS,GEAR,MOBS,CAPES,RARITY,QUESTS,
+window.EB={world,MAPS,ITEMS,TOOLS,GEAR,MOBS,CAPES,RARITY,QUESTS,RES,RECIPES,
  update,camera,setGather,setFight,setLoot,openBank,openShop,openInventory,openEquipment,
  openSkills,openQuests,openQuestBoard,openSettings,openDialog,openMonument,openCapes,openBestiary,
+ openCraft,doCraft,craftMax,craftReq,
  addItem,addGear,invCount,equipGear,unequip,gearBonus,playerAttack,rollLoot,rollRarity,
  spawnDrop,pickupDrop,pickupOne,openFloorMenu,killMob,eatFood,save,load,serialize,applySave,migrateV1,
  hurtPlayer,die,maxHp,lvlFor,totalLevel,questState,freshPlayer,rebuildPlayerSprite,

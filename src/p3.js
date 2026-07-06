@@ -6,7 +6,7 @@ function freshPlayer(){return{
   v:SAVE_VERSION,
   map:'town',tx:20,ty:17,px:20*TILE,py:17*TILE,facing:1,
   hp:14,
-  xp:{attack:0,strength:0,defence:0,ranged:0,magic:0,woodcutting:0,mining:0},
+  xp:{attack:0,strength:0,defence:0,ranged:0,magic:0,woodcutting:0,mining:0,crafting:0},
   style:'accurate', // melee training style: accurate|aggressive|defensive
   gold:0,
   inv:[],            // [{id,qty}] for stackables, [{gear:{id,r}}] for gear
@@ -201,6 +201,46 @@ function gainXp(skill,amount){
     sfx('level');
     if(after===MAX_LVL)toast(`${SKILLS[skill].name} mastered! Visit Master Aldric for your cape.`,'gold');
   }
+}
+
+/* ---------------- crafting (base items — the Crafting skill grind) ----------
+   A recipe consumes `in` materials and yields either a stackable `out` or a
+   `gear` piece (Common). Gated on the Crafting level; the Crafting cape's
+   'craftsave' perk gives a 10% chance to refund the materials. Returns how many
+   were actually crafted (0 = couldn't). */
+function craftReq(r){ /* is every input present at least once? */
+  for(const id in r.in)if(invCount(id)<r.in[id])return false;
+  return true;
+}
+function craftMax(r){ /* how many times this recipe can currently be made */
+  let n=Infinity;
+  for(const id in r.in)n=Math.min(n,Math.floor(invCount(id)/r.in[id]));
+  return n===Infinity?0:n;
+}
+function doCraft(recipeId,count){
+  const r=RECIPES[recipeId];if(!r)return 0;
+  if(lvl('crafting')<r.lvl){toast('Requires Crafting level '+r.lvl,'bad');return 0;}
+  let made=0;count=count||1;
+  for(let k=0;k<count;k++){
+    if(!craftReq(r)){if(made===0)toast('Not enough materials.','bad');break;}
+    /* space check: a gear piece or a NEW stack needs a free slot */
+    if(r.gear){if(P.inv.length>=INV_CAP){toast('Inventory full!','bad');break;}}
+    else{const outId=Object.keys(r.out)[0];
+      if(!invGet(outId)&&P.inv.length>=INV_CAP){toast('Inventory full!','bad');break;}}
+    /* consume inputs (craftsave perk may refund the whole batch of inputs) */
+    const saved=perkActive('craftsave')&&Math.random()<0.10;
+    if(!saved)for(const id in r.in)removeItem(id,r.in[id]);
+    /* produce output */
+    if(r.gear)addGear({id:r.gear,r:0});
+    else for(const id in r.out)addItem(id,r.out[id]);
+    gainXp('crafting',r.xp);
+    made++;
+  }
+  if(made){sfx('equip');
+    const label=r.gear?GEAR[r.gear].name:ITEMS[Object.keys(r.out)[0]].name;
+    toast('Crafted '+label+(made>1?' × '+made:''),'gold');
+    updateHUD();save();}
+  return made;
 }
 
 /* ---------------- quests ---------------- */

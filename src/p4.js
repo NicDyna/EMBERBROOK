@@ -259,6 +259,21 @@ function buildSprites(){
     p(5,3,2,8,'#66e0ff');p(5,3,1,8,'#bfefff');
     p(8,5,2,7,'#7af0c9');p(8,5,1,5,'#c9fff0');
     p(3,7,2,4,'#9b7fd1');p(11,7,2,4,'#9b7fd1');});
+  /* higher-tier trees: recoloured canopies over the oak trunk */
+  const mkTree=(fol,folL,folD)=>mk(32,48,(g,p)=>{
+    p(6,16,4,8,'#4e3b29');p(5,22,6,2,'#42311f');
+    p(2,2,12,12,fol);p(0,6,16,6,fol);p(4,0,8,4,fol);
+    p(3,3,5,3,folL);p(10,6,4,3,folL);p(2,10,4,2,folD);p(7,4,2,2,folL);});
+  SPR.maple=mkTree('#7a4a24','#a8702f','#5c3618'); /* amber autumn maple */
+  SPR.yew=mkTree('#1e3a24','#2f5a34','#152a1a');   /* deep rich yew */
+  /* ore veins: rock body with a tier-coloured mineral fleck */
+  const mkOre=(fleck)=>mk(32,32,(g,p)=>{
+    p(3,6,10,8,'#4e4c4a');p(5,4,7,3,'#4e4c4a');p(2,9,12,4,'#44423f');
+    p(4,5,4,2,'#5b5956');p(6,8,2,2,fleck);p(10,10,2,2,fleck);p(4,11,2,1,fleck);p(9,6,2,2,fleck);});
+  SPR.coal=mkOre('#2b2b2b');
+  SPR.mithril_rock=mkOre('#6fb7ff');
+  SPR.adamant_rock=mkOre('#5f9e6e');
+  SPR.runite_rock=mkOre('#59c1c9');
 
   /* ---- player paper-doll (rebuilt whenever equipment changes) ---- */
   rebuildPlayerSprite();
@@ -580,10 +595,16 @@ function iconShape(p,shape,c){
     case'pie':p(4,7,8,4,c);p(3,7,10,1,shade(c,0.3));p(5,9,2,1,shade(c,-0.3));p(9,9,2,1,shade(c,-0.3));break;
     case'stew':p(4,7,8,5,'#8a6a42');p(4,7,8,1,'#a4855c');p(5,6,6,2,c);p(6,5,1,1,'#e8dcc3');p(9,5,1,1,'#e8dcc3');break;
     case'coin':p(5,5,6,6,c);p(6,6,4,4,shade(c,0.3));p(7,7,2,2,c);break;
+    case'bar':p(4,8,8,4,c);p(3,9,10,2,c);p(4,8,8,1,shade(c,0.4));p(3,11,10,1,shade(c,-0.3));p(5,9,2,1,shade(c,0.6));break;
   }
 }
 const ITEM_ICON={
-  logs:['logs','#8a6a42'],oak_logs:['logs','#5b4632'],copper_ore:['ore','#c47f3e'],
+  logs:['logs','#8a6a42'],oak_logs:['logs','#5b4632'],
+  maple_logs:['logs','#a8702f'],yew_logs:['logs','#2f5a34'],
+  copper_ore:['ore','#c47f3e'],
+  coal:['ore','#2b2b2b'],mithril_ore:['ore','#6fb7ff'],adamant_ore:['ore','#5f9e6e'],runite_ore:['ore','#59c1c9'],
+  bronze_bar:['bar','#a9714b'],iron_bar:['bar','#b8c4cf'],steel_bar:['bar','#8f9aa5'],
+  mithril_bar:['bar','#6fb7ff'],adamant_bar:['bar','#5f9e6e'],rune_bar:['bar','#59c1c9'],
   iron_ore:['ore','#9fb0bd'],bone:['bone','#d8d5c8'],wolf_pelt:['pelt','#8b8b8b'],
   ancient_dust:['dust','#b0a0e0'],swamp_herb:['herb','#7af0c9'],gem:['gem','#66e0ff'],
   spider_silk:['pelt','#d8d5e8'],thick_fur:['pelt','#b9c6d4'],lion_fang:['bone','#e6c48e'],scarab_shell:['gem','#6a8a4e'],

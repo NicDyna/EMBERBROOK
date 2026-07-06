@@ -227,11 +227,54 @@ setTimeout(()=>{
   w.eval('gainXp("woodcutting",5000)');
   ok(EB.P.xp.woodcutting===xpB+5000&&w.eval('lvl("woodcutting")')===50,'overflow xp counts, level capped at 50');
 
+  /* ---------- Phase 3: Crafting skill ---------- */
+  ok(w.eval('SKILL_ORDER').length===8&&w.eval('SKILL_ORDER').includes('crafting'),'Crafting is the 8th skill');
+  ok(EB.CAPES.cape_crafting&&EB.CAPES.cape_crafting.skill==='crafting','crafting cape registered');
+
+  /* ---------- Phase 3: base crafting (smelt / gate / fletch / smith) ---------- */
+  EB.P.inv=[];EB.P.xp.crafting=0;EB.addItem('copper_ore',3);
+  const bars=EB.doCraft('bronze_bar',2);
+  ok(bars===2&&EB.invCount('bronze_bar')===2,'smelted 2 bronze bars');
+  ok(EB.invCount('copper_ore')===1,'smelting consumed 2 copper ore');
+  ok(EB.P.xp.crafting>0,'crafting xp gained: '+EB.P.xp.crafting);
+
+  EB.P.inv=[];EB.addItem('iron_ore',1);EB.addItem('coal',1);EB.P.xp.crafting=0;
+  ok(EB.doCraft('steel_bar',1)===0&&EB.invCount('steel_bar')===0,'steel bar gated behind Crafting 20');
+  EB.P.xp.crafting=w.eval('xpAt(20)');
+  ok(EB.doCraft('steel_bar',1)===1&&EB.invCount('steel_bar')===1,'smelts steel once Crafting 20 reached');
+
+  EB.P.inv=[];EB.addItem('logs',2);EB.P.xp.crafting=w.eval('xpAt(1)');
+  EB.doCraft('arrows',2);
+  ok(EB.invCount('arrows')===30&&EB.invCount('logs')===0,'fletched 30 arrows from 2 logs');
+
+  EB.P.inv=[];EB.addItem('bronze_bar',2);EB.P.xp.crafting=w.eval('xpAt(1)');
+  const smi=EB.doCraft('craft_g_m_1_weapon',1);
+  ok(smi===1&&EB.P.inv.some(s=>s.gear&&s.gear.id==='g_m_1_weapon'),'smithed a bronze sword from bars');
+  ok(EB.invCount('bronze_bar')===0,'smithing consumed the bars');
+
+  /* ---------- Phase 3: node charges (rich node yields several before depleting) ---------- */
+  EB.P.xp.mining=w.eval('xpAt(30)');
+  EB.world.mountains.mobs.forEach(m=>{m.alive=false;m.aggro=false;m.wanderT=1e12;});
+  const coal=EB.world.mountains.res.find(r=>r.type==='A'&&r.alive);
+  ok(coal&&coal.charges===3,'coal seam has 3 charges');
+  const nb=[[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dy])=>[coal.x+dx,coal.y+dy])
+    .find(([x,y])=>w.eval('walkable("mountains",'+x+','+y+')'));
+  tp('mountains',nb[0],nb[1]);EB.P.inv=[];EB.P.hp=EB.maxHp();
+  EB.setGather(coal);tick(8000);
+  ok(EB.invCount('coal')>=2,'gathered multiple coal from one node: '+EB.invCount('coal'));
+  ok(coal.charges<3,'node consumed charges (now '+coal.charges+')');
+
+  /* ---------- Phase 3: danger-zoned maps (low nodes north, high nodes south) ---------- */
+  const avgY=(map,types)=>{const rs=EB.world[map].res.filter(r=>types.includes(r.type));
+    return rs.length?rs.reduce((a,r)=>a+r.y,0)/rs.length:-1;};
+  const safeY=avgY('mountains',['Y','I']),deepY=avgY('mountains',['A','e','Z']);
+  ok(deepY>safeY,'high-tier nodes sit deeper south than safe nodes: deep '+deepY.toFixed(1)+' > safe '+safeY.toFixed(1));
+
   /* ---------- panels render without throwing ---------- */
   EB.openInventory();EB.openEquipment();EB.openSkills();EB.openQuests();
   EB.openQuestBoard();EB.openBank();EB.openShop();EB.openMonument();EB.openCapes();EB.openSettings();
-  EB.openBestiary();
-  ok(true,'all 11 panels rendered');
+  EB.openBestiary();EB.openCraft();
+  ok(true,'all 12 panels rendered (incl. crafting)');
 
   /* ---------- floor menu: selective (one-item) pickup ---------- */
   tp('forest',40,20);EB.P.inv=[];
@@ -265,6 +308,11 @@ setTimeout(()=>{
     EB.world.forest.drops.length=0;tp('forest',30,20);EB.P.hp=EB.maxHp();
     const h0=rsp.hp;EB.setFight(rsp);tick(6000);
     ok(rsp.hp<h0,'can attack immediately after loading a save (cooldown not frozen)');}
+
+  /* ---------- v2 → v3 migration: old save gets a Crafting skill for free ---- */
+  EB.applySave({v:2,map:'town',tx:20,ty:17,px:640,py:544,xp:{attack:100,woodcutting:500},stats:{}});
+  ok(EB.P.xp.crafting===0&&w.eval('lvl("crafting")')===1,'v2 save migrates: Crafting defaults to level 1');
+  ok(w.eval('totalLevel()')===w.eval('SKILL_ORDER.reduce((a,s)=>a+lvl(s),0)'),'total level counts all 8 skills');
 
   console.log(fails? '\n'+fails+' FAILURES':'\nALL TESTS PASSED');
   process.exit(fails?1:0);

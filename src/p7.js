@@ -95,7 +95,7 @@ function openSkills(){
       '<div class="xpnum">'+(l>=MAX_LVL?'MAX · '+fmtXp(P.xp[s])+' xp':cur+' / '+need+' xp')+'</div></div>';
   }
   h+='<div class="skillrow"><div class="skillname"><b>Total level</b></div><div class="skilllvl"><b>'+totalLevel()+'</b></div><div></div><div class="xpnum">'+(SKILL_ORDER.length*MAX_LVL)+' max</div></div>';
-  h+='<div class="hint">Unlocks — Woodcutting 5: Oaks · Mining 8: Iron · gear tiers at 1/5/15/25/35/45</div>';
+  h+='<div class="hint">Unlocks — WC 5/30/45: Oak·Maple·Yew · Mining 8/20/30/40/50: Iron·Coal·Mithril·Adamant·Runite · Crafting: smelt bars &amp; smith gear at the Forge</div>';
   openPanel('Skills',h);
 }
 
@@ -303,6 +303,37 @@ function openShop(){
   openPanel("Torvald's Forge — gold: "+P.gold,h);
 }
 
+/* ---------------- crafting station (recipe list at the Forge) ---------------- */
+let craftCat='Smelting';
+function openCraft(){
+  const cats=['Smelting','Fletching','Smithing'];
+  let h='<div class="stylerow">'+cats.map(c=>
+    '<button class="btn small'+(craftCat===c?' sel':'')+'" data-act="crafttab" data-arg="'+c+'">'+c+'</button>').join('')+'</div>';
+  h+='<div class="hint">Gather → craft base items → sell. Crafting level '+lvl('crafting')+'.</div>';
+  let any=false;
+  for(const id in RECIPES){
+    const r=RECIPES[id];if(r.cat!==craftCat)continue;any=true;
+    const outId=r.gear?r.gear:Object.keys(r.out)[0];
+    const outName=r.gear?GEAR[r.gear].name
+      :(r.out[outId]>1?ITEMS[outId].name+' × '+r.out[outId]:ITEMS[outId].name);
+    const locked=lvl('crafting')<r.lvl;
+    const inStr=Object.entries(r.in).map(([iid,q])=>{
+      const have=invCount(iid);
+      return '<span style="color:'+(have>=q?'var(--dim)':'#f0b0a5')+'">'+q+'× '+esc(ITEMS[iid].name)+'</span>';
+    }).join(' · ');
+    const maxN=locked?0:craftMax(r);
+    h+='<div class="qrow"><span><img class="mini" src="'+iconURL(outId)+'" alt=""> '+esc(outName)+
+      '<br><span class="hint">'+inStr+' · '+r.xp+' xp</span></span>';
+    if(locked)h+='<span class="tag locked">Crafting '+r.lvl+'</span>';
+    else h+='<span style="display:flex;gap:4px">'+
+      '<button class="btn small'+(maxN>0?'':' dim')+'" data-act="craft" data-arg="'+id+':1">Make</button>'+
+      (maxN>1?'<button class="btn small" data-act="craft" data-arg="'+id+':all">×'+maxN+'</button>':'')+'</span>';
+    h+='</div>';
+  }
+  if(!any)h+='<div class="hint">No recipes here yet.</div>';
+  openPanel('Forge — Crafting '+lvl('crafting'),h);
+}
+
 /* ---------------- Master Aldric (capes) ---------------- */
 function openCapes(){
   let h='<div class="sect">Capes of Accomplishment — 5,000g each at level 50</div>';
@@ -404,6 +435,7 @@ function openDialog(npc){
   }
   if(npc.role==='bank')addOpt(opts,'🏦 Open bank',()=>{closeDialog();openBank();});
   if(npc.role==='shop')addOpt(opts,'⚒ Trade',()=>{closeDialog();openShop();});
+  if(npc.role==='shop')addOpt(opts,'🔨 Craft',()=>{closeDialog();openCraft();});
   if(npc.role==='capes')addOpt(opts,'🎽 Capes of Accomplishment',()=>{closeDialog();openCapes();});
   addOpt(opts,'Farewell.',closeDialog);
   $('dialog').classList.add('open');
@@ -494,6 +526,12 @@ $('pbody').addEventListener('click',ev=>{
   else if(act==='withdraw'){const q=P.bank[arg]||0;if(q&&addItem(arg,q)){delete P.bank[arg];openBank();}else if(q)toast('Bag is full!');}
   else if(act==='withdrawgear'){const pc=P.bankGear[+arg];if(pc&&addGear(pc)){P.bankGear.splice(+arg,1);openBank();}else toast('Bag is full!');}
   else if(act==='shoptab'){shopTab=arg;openShop();}
+  else if(act==='crafttab'){craftCat=arg;openCraft();}
+  else if(act==='craft'){
+    const[rid,cnt]=arg.split(':');
+    const n=cnt==='all'?craftMax(RECIPES[rid]):+cnt;
+    if(n>0)doCraft(rid,n);openCraft();
+  }
   else if(act==='sell'){const s=P.inv[+arg];if(s&&ITEMS[s.id]){const g=ITEMS[s.id].sell*s.qty;P.inv.splice(+arg,1);addGold(g);sfx('coin');toast('Sold for '+g+'g','gold');openShop();}}
   else if(act==='sellgear'){const s=P.inv[+arg];if(s&&s.gear){const g=gearSellValue(s.gear);P.inv.splice(+arg,1);addGold(g);sfx('coin');toast('Sold '+gearName(s.gear)+' for '+g+'g','gold');openShop();}}
   else if(act==='bulksell'){

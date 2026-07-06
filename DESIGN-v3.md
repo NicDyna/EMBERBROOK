@@ -120,9 +120,14 @@ attacker, target)` + timed effect entries on mob state, covering the 11 keywords
 2. ✅ **Bestiary + rare popup + floor menu (§5–7)** — `P.bestiary` credited on pickup via
    source-tagged drops; 🐾 button → `openBestiary`; Epic+ `itemPopup` banner; long-tap →
    `openFloorMenu` selective `pickupOne` + swap. Done.
-3. ⏳ **Crafting skill + base crafting + tiered resources/node-charges + danger-zoned maps (§1–3)**
-   — the economy backbone. **NEXT.**
-4. ⏳ **Effects engine + fusion tree (§9, §4)** — endgame payoff; depends on 3.
+3. ✅ **Crafting skill + base crafting + tiered resources/node-charges + danger-zoned maps (§1–3)**
+   — the economy backbone. Done 2026-07-07. 8th `crafting` skill (cape at 50, save v3 w/ auto-migration);
+   XP curve steepened `45·(l−1)^1.8`→`50·(l−1)^1.95` (~2× to-50); RES extended to tiered ore/log ladders
+   with the `hp` field repurposed as node **charges** (1 low-tier → 5 runite); `buildRegions` danger-zoned
+   (safe skilling belt north, high-tier nodes among mobs in the deep south); base crafting via a **recipe
+   station** at the Forge (Smelting/Fletching/Smithing — ore→bars→base melee gear, logs→arrows). smoke.js
+   extended (+17 assertions, deterministic).
+4. ⏳ **Effects engine + fusion tree (§9, §4)** — endgame payoff; depends on 3. **NEXT.**
 
 Each phase: edit `src/`, rebuild `static/game.js`, bump `sw.js`, run + extend `smoke.js`.
 

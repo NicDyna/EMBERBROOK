@@ -327,9 +327,12 @@ function doAction(){
       toast('+1 '+ITEMS[d.item].name,'drop');
       questEvent('gather',d.item);
       if(d.skill==='woodcutting')P.stats.chopped++;else P.stats.mined++;
+      /* node charges: keep working the same node until its charges run out */
+      t.charges=(t.charges!=null?t.charges:(d.hp||1))-1;
+      if(t.charges>0)return; /* still yields — stay on this node next tick */
       t.alive=false;t.respawnAt=T+d.respawn;
       const next=nearestRes(t.type,t.x,t.y);
-      if(next)setGather(next);else{P.action=null;toast('No more nearby. Tap another resource.');}
+      if(next)setGather(next);else{P.action=null;toast('Node depleted. Tap another resource.');}
     }
     return;
   }
@@ -461,7 +464,7 @@ function updateMobs(){
       }
     }
   }
-  for(const r of W.res)if(!r.alive&&T>=r.respawnAt)r.alive=true;
+  for(const r of W.res)if(!r.alive&&T>=r.respawnAt){r.alive=true;r.charges=RES[r.type].hp||1;}
 }
 /* townsfolk gently mill about near their post (gives them a walk cycle) */
 function updateNpcs(){

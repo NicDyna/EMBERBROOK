@@ -1,6 +1,9 @@
 /* p6: rendering & HUD — camera, tile pass, ground drops (rarity glow),
        gravestone timer, projectiles, bosses drawn 2x, paper-doll player */
 const cv=$('cv'),ctx=cv.getContext('2d');
+/* resource node → sprite key (resolved against SPR at draw time, after buildSprites) */
+const TREE_SPR={O:'oak',Y:'pine',J:'maple',L:'yew'};
+const ROCK_SPR={I:'rock_i',Z:'crystal',A:'coal',e:'mithril_rock',u:'adamant_rock',j:'runite_rock'};
 let SCALE=2,VW=0,VH=0;
 function resize(){
   const dpr=Math.min(2,window.devicePixelRatio||1);
@@ -106,10 +109,10 @@ function draw(){
       const r=it.o,d=RES[r.type];
       if(d.skill==='woodcutting'){
         const sway=r.alive?Math.sin(T/900+r.x*1.3)*0.8:0; /* gentle wind */
-        const tspr=r.type==='O'?SPR.oak:r.type==='Y'?SPR.pine:SPR.tree;
+        const tspr=SPR[TREE_SPR[r.type]]||SPR.tree;
         ctx.drawImage(r.alive?tspr:SPR.stump,r.x*TILE+sway,r.y*TILE-(r.alive?16:0));
       }else{
-        const rspr=r.type==='I'?SPR.rock_i:r.type==='Z'?SPR.crystal:SPR.rock_c;
+        const rspr=SPR[ROCK_SPR[r.type]]||SPR.rock_c;
         ctx.drawImage(r.alive?rspr:SPR.rubble,r.x*TILE,r.y*TILE);
       }
     }else if(it.k==='m'){

@@ -5,7 +5,7 @@
    p1: constants, skills & XP, items, gear generation, rarity
    ============================================================ */
 'use strict';
-const TILE=32, INV_CAP=20, MAX_LVL=50, SAVE_VERSION=2;
+const TILE=32, INV_CAP=20, MAX_LVL=50, SAVE_VERSION=3;
 const $=id=>document.getElementById(id);
 const rand=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
 const clamp=(v,a,b)=>Math.max(a,Math.min(v,b));
@@ -27,9 +27,13 @@ const SKILLS={
   magic:      {name:'Magic',      color:'#9b7fd1', icon:'staff'},
   woodcutting:{name:'Woodcutting',color:'#8a9a5b', icon:'axe'},
   mining:     {name:'Mining',     color:'#a08c78', icon:'pick'},
+  crafting:   {name:'Crafting',   color:'#c98b50', icon:'hammer'},
 };
-const SKILL_ORDER=['attack','strength','defence','ranged','magic','woodcutting','mining'];
-const xpAt=l=>Math.floor(45*Math.pow(l-1,1.8));
+const SKILL_ORDER=['attack','strength','defence','ranged','magic','woodcutting','mining','crafting'];
+/* XP curve (v3): steepened from 45·(l-1)^1.8 so maxing is a long ACTIVE grind
+   — total XP to 50 roughly doubled (~50k → ~99k). Higher-tier nodes/mobs pay
+   proportionally more. Revert this one line to restore the old, faster pacing. */
+const xpAt=l=>Math.floor(50*Math.pow(l-1,1.95));
 /* Level is capped at 50; XP itself keeps counting (overflow). */
 function lvlFor(xp){let l=1;while(l<MAX_LVL&&xp>=xpAt(l+1))l++;return l;}
 
@@ -145,6 +149,7 @@ const CAPES={
   cape_magic:{skill:'magic',name:'Magic Cape',color:'#9b7fd1',perk:'10% chance to save runes',price:5000},
   cape_woodcutting:{skill:'woodcutting',name:'Woodcutting Cape',color:'#8a9a5b',perk:'+10% chop speed',price:5000},
   cape_mining:{skill:'mining',name:'Mining Cape',color:'#a08c78',perk:'+10% mine speed',price:5000},
+  cape_crafting:{skill:'crafting',name:'Crafting Cape',color:'#c98b50',perk:'10% chance to save materials',price:5000},
   cape_max:{skill:null,name:'Max Cape',color:'#f0c419',perk:'All cape perks combined',price:25000},
 };
 function capePerkActive(capeId){
@@ -155,7 +160,8 @@ function capePerkActive(capeId){
    (or Max Cape) or by any equipped unique. Effects:
    acc, meleedmg, dmgred, savearrow, saverune, chop, mine */
 const CAPE_EFFECT={cape_attack:'acc',cape_strength:'meleedmg',cape_defence:'dmgred',
-  cape_ranged:'savearrow',cape_magic:'saverune',cape_woodcutting:'chop',cape_mining:'mine'};
+  cape_ranged:'savearrow',cape_magic:'saverune',cape_woodcutting:'chop',cape_mining:'mine',
+  cape_crafting:'craftsave'};
 function perkActive(effect){
   const worn=P.gear.cape&&P.gear.cape.id;
   if(worn==='cape_max')return true;
@@ -168,8 +174,21 @@ function perkActive(effect){
 const ITEMS={
   logs:{name:'Logs',price:0,sell:3,stack:true},
   oak_logs:{name:'Oak Logs',price:0,sell:8,stack:true},
+  maple_logs:{name:'Maple Logs',price:0,sell:20,stack:true},
+  yew_logs:{name:'Yew Logs',price:0,sell:44,stack:true},
   copper_ore:{name:'Copper Ore',price:0,sell:5,stack:true},
   iron_ore:{name:'Iron Ore',price:0,sell:12,stack:true},
+  coal:{name:'Coal',price:0,sell:16,stack:true},
+  mithril_ore:{name:'Mithril Ore',price:0,sell:34,stack:true},
+  adamant_ore:{name:'Adamant Ore',price:0,sell:64,stack:true},
+  runite_ore:{name:'Runite Ore',price:0,sell:120,stack:true},
+  /* smithed bars — crafting products (sell for gold, feed base-gear smithing) */
+  bronze_bar:{name:'Bronze Bar',price:0,sell:14,stack:true},
+  iron_bar:{name:'Iron Bar',price:0,sell:28,stack:true},
+  steel_bar:{name:'Steel Bar',price:0,sell:60,stack:true},
+  mithril_bar:{name:'Mithril Bar',price:0,sell:120,stack:true},
+  adamant_bar:{name:'Adamant Bar',price:0,sell:230,stack:true},
+  rune_bar:{name:'Runite Bar',price:0,sell:440,stack:true},
   bone:{name:'Bones',price:0,sell:2,stack:true},
   wolf_pelt:{name:'Wolf Pelt',price:0,sell:9,stack:true},
   ancient_dust:{name:'Ancient Dust',price:0,sell:18,stack:true},
@@ -196,3 +215,39 @@ const TOOLS={
   iron_pick:{name:'Iron Pickaxe',slot:'pick',tier:2,speed:.7,price:120,icon:['pick','#b8c4cf']},
   steel_pick:{name:'Steel Pickaxe',slot:'pick',tier:3,speed:.55,price:600,icon:['pick','#8f9aa5']},
 };
+
+/* ---------------- crafting recipes (the base-item grind) ----------------
+   Leveled at the Forge (Smith Torvald). Three chains:
+     Smelting  — ore (+coal) → metal bar
+     Fletching — logs → arrows
+     Smithing  — bars → base melee gear (Common, r=0; sell or wield)
+   Recipe: {name,cat,lvl,xp, in:{item:qty,...}, out:{item:qty} | gear:'g_..id'}.
+   'lvl' gates on the Crafting skill; higher tiers pay proportionally more xp. */
+const BAR_BY_TIER=['bronze_bar','iron_bar','steel_bar','mithril_bar','adamant_bar','rune_bar'];
+const CRAFT_LVL_BY_TIER=[1,10,20,30,40,50];
+const SMELT_XP_BY_TIER=[12,20,32,50,75,110];
+const SLOT_BARS={weapon:2,shield:3,helmet:1,body:5,legs:3};
+const RECIPES={
+  /* --- Smelting: 1 ore (+coal from steel up) → 1 bar --- */
+  bronze_bar:{name:'Bronze Bar',cat:'Smelting',lvl:1, xp:12, in:{copper_ore:1},           out:{bronze_bar:1}},
+  iron_bar:  {name:'Iron Bar',  cat:'Smelting',lvl:10,xp:20, in:{iron_ore:1},              out:{iron_bar:1}},
+  steel_bar: {name:'Steel Bar', cat:'Smelting',lvl:20,xp:32, in:{iron_ore:1,coal:1},       out:{steel_bar:1}},
+  mithril_bar:{name:'Mithril Bar',cat:'Smelting',lvl:30,xp:50,in:{mithril_ore:1,coal:2},   out:{mithril_bar:1}},
+  adamant_bar:{name:'Adamant Bar',cat:'Smelting',lvl:40,xp:75,in:{adamant_ore:1,coal:3},   out:{adamant_bar:1}},
+  rune_bar:  {name:'Runite Bar',cat:'Smelting',lvl:50,xp:110,in:{runite_ore:1,coal:4},      out:{rune_bar:1}},
+  /* --- Fletching: logs → arrows --- */
+  arrows:      {name:'Arrows ×15',    cat:'Fletching',lvl:1, xp:8,  in:{logs:1},       out:{arrows:15}},
+  arrows_oak:  {name:'Arrows ×30',    cat:'Fletching',lvl:15,xp:18, in:{oak_logs:1},   out:{arrows:30}},
+  arrows_maple:{name:'Arrows ×60',    cat:'Fletching',lvl:35,xp:40, in:{maple_logs:1}, out:{arrows:60}},
+};
+/* --- Smithing: generate melee-line base gear from bars (buildGear ran above) --- */
+(function buildGearRecipes(){
+  for(let t=1;t<=6;t++){
+    const bar=BAR_BY_TIER[t-1], lvl=CRAFT_LVL_BY_TIER[t-1], sx=SMELT_XP_BY_TIER[t-1];
+    for(const slot in LINE_DEFS.m.slots){
+      const gid='g_m_'+t+'_'+slot, n=SLOT_BARS[slot];
+      RECIPES['craft_'+gid]={name:'Smith '+GEAR[gid].name,cat:'Smithing',lvl,
+        xp:Math.round(n*sx*0.9), in:{[bar]:n}, gear:gid};
+    }
+  }
+})();
