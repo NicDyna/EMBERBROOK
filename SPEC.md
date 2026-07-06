@@ -50,6 +50,13 @@ Attack, Strength, Defence, Ranged, Magic, Woodcutting, Mining.
   above tier 1 is drop-only.
 - Selling: 25% of formula price × rarity multiplier; bulk-sell buttons by
   rarity in the shop's Sell tab.
+- Reforge (Forge → Reforge tab): raise a piece's rarity a step using gold +
+  materials. The material ladder is biome-gated (silk→Uncommon, fur→Rare,
+  fang→Epic, shell→Legendary), so full upgrades require every region.
+- Boss uniques: each dungeon boss has a ~14% signature drop — a named best-in-
+  slot piece ('Unique' rarity, orange) with a passive perk (e.g. Frostmaul
+  +5% melee dmg, Pharaoh's Sceptre 10% rune save). Perks share one system with
+  the skillcapes; can't be reforged or bulk-sold.
 
 ## Loot & death
 - Kills drop loot on the ground (RS-style): tap to walk over and pick up.

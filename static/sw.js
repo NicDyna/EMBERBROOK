@@ -1,6 +1,6 @@
 // Emberbrook service worker — network-first for app files so updates land
 // immediately; cached copies serve as the offline fallback.
-const CACHE = 'emberbrook-v2.6.0'; // bump on every release
+const CACHE = 'emberbrook-v2.7.0'; // bump on every release
 const APP_FILES = ['/', '/game.js', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', e => {

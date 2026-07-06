@@ -111,19 +111,19 @@ const MOBS={
 
   /* ===== Dungeon bosses (big 2× sprite, ~5-min respawn, best loot) ===== */
   bandit_king:{name:'The Bandit King',lvl:16,hp:100,style:'melee',acc:18,pow:12,def:12,spd:2400,range:1,
-    aggro:true,xp:360,gold:[50,110],boss:true,respawn:300000,rarityBoost:2,
+    aggro:true,xp:360,gold:[50,110],boss:true,respawn:300000,rarityBoost:2,unique:'u_bandit_coat',
     loot:[{w:42,gear:{tierMin:2,tierMax:3}},{w:28,gold:[50,110]},{w:18,item:'meat_pie',q:[1,2]},
           {w:12,item:'gem',q:[1,1]},{w:16,item:'spider_silk',q:[2,4]}]},
   frost_giant:{name:'The Frost Giant',lvl:32,hp:190,style:'melee',acc:26,pow:16,def:24,spd:2800,range:1,
-    aggro:true,xp:640,gold:[90,200],boss:true,respawn:300000,rarityBoost:2,
+    aggro:true,xp:640,gold:[90,200],boss:true,respawn:300000,rarityBoost:2,unique:'u_frostmaul',
     loot:[{w:42,gear:{tierMin:3,tierMax:5}},{w:26,gold:[90,200]},{w:18,item:'gem',q:[1,2]},
           {w:14,item:'iron_ore',q:[2,4]},{w:18,item:'thick_fur',q:[2,4]}]},
   plains_warlord:{name:'The Plains Warlord',lvl:42,hp:220,style:'melee',acc:40,pow:24,def:30,spd:2400,range:1,
-    aggro:true,xp:900,gold:[140,300],boss:true,respawn:300000,rarityBoost:3,
+    aggro:true,xp:900,gold:[140,300],boss:true,respawn:300000,rarityBoost:3,unique:'u_warlord_bulwark',
     loot:[{w:44,gear:{tierMin:4,tierMax:6}},{w:24,gold:[140,300]},{w:18,item:'gem',q:[2,3]},
           {w:14,item:'ancient_dust',q:[2,4]},{w:18,item:'lion_fang',q:[2,4]}]},
   sand_pharaoh:{name:'The Sand Pharaoh',lvl:50,hp:260,style:'magic',acc:48,pow:30,def:36,spd:2600,range:5,
-    aggro:true,xp:1600,gold:[240,480],boss:true,respawn:300000,rarityBoost:3,
+    aggro:true,xp:1600,gold:[240,480],boss:true,respawn:300000,rarityBoost:3,unique:'u_pharaoh_sceptre',
     loot:[{w:46,gear:{tierMin:5,tierMax:6}},{w:22,gold:[240,480]},{w:18,item:'gem',q:[2,4]},
           {w:14,item:'ancient_dust',q:[4,7]},{w:20,item:'scarab_shell',q:[2,4]}]},
 };

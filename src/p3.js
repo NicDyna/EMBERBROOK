@@ -265,7 +265,15 @@ function loginBonus(){
 
 /* ---------------- feedback ---------------- */
 const floaters=[];
-function floater(x,y,txt,color){floaters.push({x,y,txt,color,t0:T,life:1100});}
+function floater(x,y,txt,color,size){floaters.push({x,y,txt,color,t0:T,life:1100,size:size||9});}
+/* transient spark particles (hits, kills, damage) — rendered in p6 */
+const particles=[];
+function spawnParticles(x,y,color,n,power){
+  n=n||6;power=power||1;
+  for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,sp=(30+Math.random()*60)*power;
+    particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-30*power,t0:T,
+      life:360+Math.random()*180,color,size:1+(Math.random()*2|0)});}
+}
 function toast(msg,cls){
   const el=document.createElement('div');el.className='toast '+(cls||'');el.textContent=msg;
   $('toasts').appendChild(el);
@@ -291,7 +299,7 @@ function showXpBar(skill){
 }
 /* tiny WebAudio sfx */
 let AC=null,soundOn=true;
-function ensureAudio(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}}}
+function ensureAudio(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}}startAmbient();}
 function beep(freq,dur,type,vol,when){
   if(!AC||!soundOn)return;
   const o=AC.createOscillator(),g=AC.createGain();
@@ -318,5 +326,29 @@ function sfx(kind){
     case'equip':beep(300,.05,'square',.04);beep(420,.06,'square',.04,.05);break;
     case'coin':beep(700,.05,'triangle',.04);beep(880,.06,'triangle',.03,.04);break;
     case'die':beep(200,.2,'sawtooth',.06);beep(150,.25,'sawtooth',.05,.15);beep(100,.35,'sawtooth',.05,.3);break;
+    case'warp':beep(440,.08,'sine',.05);beep(660,.1,'sine',.05,.07);beep(880,.14,'sine',.04,.15);break;
   }
 }
+/* ---- subtle biome ambient pad (very low volume; follows the sound toggle) ---- */
+let AMB=null;
+function ambientFreq(){const m=P.map;
+  if(m.indexOf('dungeon')>=0)return 82;
+  if(m==='desert')return 98; if(m==='mountains')return 165;
+  if(m==='plains')return 131; if(m==='forest')return 123; return 110; /* town */}
+function startAmbient(){
+  if(!AC||!soundOn||AMB)return;
+  try{
+    const g=AC.createGain();g.gain.value=0.009;g.connect(AC.destination);
+    const f=ambientFreq();
+    const o1=AC.createOscillator();o1.type='sine';o1.frequency.value=f;o1.connect(g);
+    const o2=AC.createOscillator();o2.type='sine';o2.frequency.value=f*1.006;o2.connect(g);
+    const lfo=AC.createOscillator();lfo.type='sine';lfo.frequency.value=0.1;
+    const lg=AC.createGain();lg.gain.value=0.005;lfo.connect(lg);lg.connect(g.gain);
+    o1.start();o2.start();lfo.start();
+    AMB={o1,o2,lfo,g};
+  }catch(e){}
+}
+function stopAmbient(){if(AMB){try{AMB.o1.stop();AMB.o2.stop();AMB.lfo.stop();}catch(e){}AMB=null;}}
+function ambientBiome(){if(AMB&&AC){try{const f=ambientFreq();
+  AMB.o1.frequency.setTargetAtTime(f,AC.currentTime,0.5);
+  AMB.o2.frequency.setTargetAtTime(f*1.006,AC.currentTime,0.5);}catch(e){}}}

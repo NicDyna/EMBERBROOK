@@ -43,7 +43,8 @@ function invInfoHtml(i){
     const chk=canEquip(s.gear);
     return '<b style="color:'+gearColor(s.gear)+'">'+esc(gearName(s.gear))+'</b><br>'+
       esc(stats)+'<br><span class="hint">'+SKILLS[g.reqSkill].name+' '+g.req+
-      (g.spd?' · speed '+(g.spd/1000)+'s':'')+ (g.ammo?' · uses '+ITEMS[g.ammo].name:'')+'</span><br>'+
+      (g.spd?' · speed '+(g.spd/1000)+'s':'')+ (g.ammo?' · uses '+ITEMS[g.ammo].name:'')+'</span>'+
+      (g.unique&&g.perkDesc?'<br><span style="color:#ff8a3a">✦ '+esc(g.perkDesc)+'</span>':'')+'<br>'+
       (chk.ok?'<button class="btn small" data-act="equip" data-arg="'+i+'">Equip</button>'
              :'<span class="tag locked">'+esc(chk.why)+'</span>')+
       ' <button class="btn small danger" data-act="drop" data-arg="'+i+'">Drop</button>';
@@ -177,12 +178,35 @@ function openBank(){
   openPanel('Bank of Emberbrook',h);
 }
 
+/* ---------------- reforge (raise a piece's rarity with materials) --------
+   Ladder gated by biome materials (Legendary needs the desert shell); gold
+   scales with the piece's tier. Uniques are already best and can't reforge. */
+const REFORGE=[null,
+  {gold:150, mats:{iron_ore:3, spider_silk:1}},        // →Uncommon
+  {gold:500, mats:{iron_ore:5, gem:1, thick_fur:2}},   // →Rare
+  {gold:1500,mats:{gem:3, lion_fang:2}},               // →Epic
+  {gold:4000,mats:{gem:5, scarab_shell:3}}];            // →Legendary
+function canReforge(piece){
+  const g=GEAR[piece.id],r=piece.r||0;
+  if(!g||g.unique||r>=4)return null;
+  const c=REFORGE[r+1],gold=Math.round(c.gold*g.tier);
+  const ok=P.gold>=gold && Object.entries(c.mats).every(([id,q])=>invCount(id)>=q);
+  return {gold, mats:c.mats, toR:r+1, ok};
+}
+function doReforge(i){
+  const s=P.inv[i];if(!s||!s.gear)return false;
+  const c=canReforge(s.gear);if(!c||!c.ok)return false;
+  P.gold-=c.gold;for(const id in c.mats)removeItem(id,c.mats[id]);
+  s.gear.r=c.toR;sfx('rare');updateHUD();save();return true;
+}
+
 /* ---------------- shop ---------------- */
 let shopTab='buy';
 function openShop(){
   let h='<div class="stylerow">'+
     '<button class="btn small'+(shopTab==='buy'?' sel':'')+'" data-act="shoptab" data-arg="buy">Buy</button>'+
-    '<button class="btn small'+(shopTab==='sell'?' sel':'')+'" data-act="shoptab" data-arg="sell">Sell</button></div>';
+    '<button class="btn small'+(shopTab==='sell'?' sel':'')+'" data-act="shoptab" data-arg="sell">Sell</button>'+
+    '<button class="btn small'+(shopTab==='reforge'?' sel':'')+'" data-act="shoptab" data-arg="reforge">Reforge</button></div>';
   if(shopTab==='buy'){
     h+='<div class="sect">Starter gear (better gear drops from monsters)</div>';
     for(const L of['m','r','g']){
@@ -206,7 +230,7 @@ function openShop(){
         (owned?'<span class="tag done">owned</span>'
         :'<button class="btn small'+(P.gold<t.price?' dim':'')+'" data-act="buytool" data-arg="'+id+'">'+t.price+'g</button>')+'</div>';
     }
-  }else{
+  }else if(shopTab==='sell'){
     h+='<div class="sect">Tap a stack or piece to sell</div><div class="grid small">';
     let any=false;
     P.inv.forEach((s,i)=>{
@@ -215,12 +239,24 @@ function openShop(){
     });
     if(!any)h+='<div class="hint" style="grid-column:1/-1">Nothing to sell — go adventuring!</div>';
     h+='</div><div class="sect">Bulk sell gear by rarity</div><div class="stylerow" style="flex-wrap:wrap">';
-    for(let r=0;r<RARITY.length;r++){
+    for(let r=0;r<5;r++){ /* never bulk-sell Uniques (r=5) */
       const n=P.inv.filter(s=>s.gear&&(s.gear.r||0)===r).length;
       if(n)h+='<button class="btn small" data-act="bulksell" data-arg="'+r+'" style="border-color:'+RARITY[r].color+'">'+
         (RARITY[r].name||'Common ').trim()+' × '+n+'</button>';
     }
     h+='</div>';
+  }else{ /* reforge */
+    h+='<div class="sect">Reforge — raise a piece\'s rarity with materials</div>';
+    let any=false;
+    P.inv.forEach((s,i)=>{
+      if(!s.gear)return;const c=canReforge(s.gear);if(!c)return;any=true;
+      const matStr=Object.entries(c.mats).map(([id,q])=>q+'× '+ITEMS[id].name+
+        (invCount(id)>=q?'':' <span style="color:#f0b0a5">('+invCount(id)+')</span>')).join(', ');
+      h+='<div class="qrow"><span><img class="mini" src="'+iconURL(s.gear.id)+'" alt=""> '+esc(gearName(s.gear))+
+        ' <span class="hint">→ '+RARITY[c.toR].name.trim()+'</span><br><span class="hint">'+c.gold+'g · '+matStr+'</span></span>'+
+        '<button class="btn small'+(c.ok?'':' dim')+'" data-act="reforge" data-arg="'+i+'">Reforge</button></div>';
+    });
+    if(!any)h+='<div class="hint">No eligible gear here. Reforging raises Common→Legendary using ore, gems, and biome materials (silk → fur → fang → shell).</div>';
   }
   openPanel("Torvald's Forge — gold: "+P.gold,h);
 }
@@ -377,6 +413,12 @@ $('pbody').addEventListener('click',ev=>{
     if(n){addGold(g);sfx('coin');toast('Sold '+n+' pieces for '+g+'g','gold');}
     openShop();
   }
+  else if(act==='reforge'){
+    const s=P.inv[+arg];
+    if(s&&s.gear&&doReforge(+arg))toast('Reforged into '+gearName(s.gear)+'!','gold');
+    else toast('Not enough materials or gold.','bad');
+    openShop();
+  }
   else if(act==='buygear'){
     const g=GEAR[arg],pr=gearPrice(g);
     if(P.gold<pr){toast('Not enough gold.');return;}
@@ -411,7 +453,7 @@ $('pbody').addEventListener('click',ev=>{
       toast('Daily reward: +'+t.gold+'g','gold');save();openQuestBoard();
     }
   }
-  else if(act==='togglesound'){soundOn=!soundOn;openSettings();}
+  else if(act==='togglesound'){soundOn=!soundOn;if(soundOn){ensureAudio();startAmbient();}else stopAmbient();openSettings();}
   else if(act==='savenow'){save();toast('Game saved.');}
   else if(act==='syncnow'){
     const tok=($('tokinput')&&$('tokinput').value.trim())||'';

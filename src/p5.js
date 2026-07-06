@@ -22,6 +22,7 @@ function switchMap(ex){
   P.path=[];P.moving=null;P.action=null;
   world[P.map].mobs.forEach(m=>m.aggro=false);
   if(REGION_ORDER.includes(P.map)){if(!P.reached)P.reached={};P.reached[P.map]=true;}
+  ambientBiome();
   const zl=$('zone');zl.textContent=MAPS[P.map].name;
   zl.classList.remove('go');void zl.offsetWidth;zl.classList.add('go');
   save();
@@ -42,8 +43,9 @@ function warpTo(dest){
   P.path=[];P.moving=null;P.action=null;
   world[dest].mobs.forEach(m=>m.aggro=false);
   if(REGION_ORDER.includes(dest)){if(!P.reached)P.reached={};P.reached[dest]=true;}
+  ambientBiome();
   const zl=$('zone');zl.textContent=MAPS[dest].name;zl.classList.remove('go');void zl.offsetWidth;zl.classList.add('go');
-  sfx('level');save();
+  sfx('warp');save();
 }
 
 /* ---------------- current combat mode from weapon ---------------- */
@@ -86,8 +88,8 @@ function playerAttack(){
           + (m==='ranged'?b.rpow:m==='magic'?b.mpow:0)*0.5;
   if(m==='melee'&&P.style==='accurate')acc*=1.12;
   if(m==='melee'&&P.style==='aggressive')pow*=1.1;
-  if(capePerkActive('cape_attack'))acc*=1.05;
-  if(m==='melee'&&capePerkActive('cape_strength'))pow*=1.05;
+  if(perkActive('acc'))acc*=1.05;
+  if(m==='melee'&&perkActive('meleedmg'))pow*=1.05;
   return{acc,maxHit:Math.max(1,Math.floor(pow)),mode:m};
 }
 function playerDefence(){
@@ -186,7 +188,7 @@ function pickupDrop(d){
         toast('+ '+nm,(it.gear.r||0)>=2?'gold':'drop');
         if((it.gear.r||0)>=3){sfx('rare');
           P.stats.bestDrop=nm;
-          if(it.gear.r===4){P.stats.legendaries++;levelFlash('LEGENDARY! '+nm);}
+          if(it.gear.r>=4){P.stats.legendaries++;levelFlash((it.gear.r===5?'UNIQUE! ':'LEGENDARY! ')+nm);}
         }else sfx('loot');
       }else{remain.push(it);toast('Inventory full','bad');}
     }else{
@@ -222,6 +224,8 @@ function rollLoot(mob){
       out.items.push({gear:{id:`g_${line}_${tier}_${slot}`,r:rollRarity(d.rarityBoost||0)}});
     }
   }
+  /* boss signature drop: ~14% chance to also drop its unique (rarity 5) */
+  if(d.unique&&GEAR[d.unique]&&Math.random()<0.14)out.items.push({gear:{id:d.unique,r:5}});
   return out;
 }
 
@@ -274,8 +278,8 @@ function doAction(){
     if(!invGet(d.item)&&P.inv.length>=INV_CAP){toast('Inventory full! Bank or sell in town.');P.action=null;return;}
     const tool=d.skill==='woodcutting'?TOOLS[P.tools.axe]:TOOLS[P.tools.pick];
     let speed=Math.max(600,d.time*tool.speed*(1-lvl(d.skill)*0.006));
-    if(d.skill==='woodcutting'&&capePerkActive('cape_woodcutting'))speed*=0.9;
-    if(d.skill==='mining'&&capePerkActive('cape_mining'))speed*=0.9;
+    if(d.skill==='woodcutting'&&perkActive('chop'))speed*=0.9;
+    if(d.skill==='mining'&&perkActive('mine'))speed*=0.9;
     P.action.prog=(P.action.prog||0)+FRAME_DT;
     if(P.action.prog>=speed){
       P.action.prog=0;
@@ -301,8 +305,8 @@ function doAction(){
       const ammo=ammoFor(mode);
       if(ammo){
         if(invCount(ammo)<=0){toast('Out of '+ITEMS[ammo].name+'!','bad');P.action=null;return;}
-        const saveCape=mode==='ranged'?'cape_ranged':'cape_magic';
-        if(!(capePerkActive(saveCape)&&Math.random()<0.10))removeItem(ammo,1);
+        const saveEff=mode==='ranged'?'savearrow':'saverune';
+        if(!(perkActive(saveEff)&&Math.random()<0.10))removeItem(ammo,1);
         if(invCount(ammo)===50)toast('Only 50 '+ITEMS[ammo].name+' left','bad');
       }
       P.atkT=T;
@@ -315,8 +319,10 @@ function doAction(){
       else if(mode==='magic'){shoot(P.px+16,P.py+8,t.px+16,t.py+8,'#b06fd1');sfx('zap');}
       else sfx('hit');
       t.hp-=dmg;
-      floater(t.px+16,t.py-6,dmg>0?'-'+dmg:'miss',dmg>0?'#e85b4a':'#9aa');
+      const big=dmg>0&&dmg>=atk.maxHit*0.75;
+      floater(t.px+16,t.py-6,dmg>0?'-'+dmg:'miss',dmg>0?(big?'#ffd24a':'#ffe3a0'):'#9aa',dmg>0?(big?13:10):9);
       if(dmg>0){
+        spawnParticles(t.px+16,t.py+8,mode==='magic'?'#c9a5ff':mode==='ranged'?'#e8e2c8':'#ffd27a',big?9:5,big?1.6:1);
         gainXp(trainSkill(),dmg*4);
         if(mode!=='melee')dailyEvent('stylehit',null,1);
       }
@@ -331,10 +337,11 @@ function killMob(m){
   const loot=rollLoot(m);
   spawnDrop(P.map,m.tx,m.ty,loot);
   sfx('kill');
+  spawnParticles(m.px+16,m.py+10,d.boss?'#ffcf5a':'#e8b070',d.boss?22:12,d.boss?2.2:1.4);
   P.stats.kills++;
   if(d.boss){
     P.stats.bossKills[m.type]=(P.stats.bossKills[m.type]||0)+1;
-    levelFlash(d.name+' defeated!');
+    levelFlash(d.name+' defeated!');shake(6);
   }
   questEvent('kill',m.type,P.map);
   const next=nearestMob(m.type,P.tx,P.ty);
@@ -342,10 +349,12 @@ function killMob(m){
   save();
 }
 function hurtPlayer(dmg){
-  if(capePerkActive('cape_defence'))dmg=Math.max(0,Math.round(dmg*0.95));
+  if(perkActive('dmgred'))dmg=Math.max(0,Math.round(dmg*0.95));
   if(dmg<=0){floater(P.px+16,P.py-10,'miss','#9aa');return;}
   P.hp-=dmg;P.lastHurt=T;sfx('hurt');
-  floater(P.px+16,P.py-10,'-'+dmg,'#e85b4a');
+  shake(Math.min(9,2.5+dmg*0.5));
+  spawnParticles(P.px+16,P.py+8,'#e85b4a',5,1);
+  floater(P.px+16,P.py-10,'-'+dmg,'#ff6a5a',11);
   if(P.hp<=0)die();
 }
 /* death: carried items drop as a gravestone; equipped gear is kept.
@@ -472,5 +481,6 @@ function update(dt){
   }
   for(let i=floaters.length-1;i>=0;i--)if(T-floaters[i].t0>floaters[i].life)floaters.splice(i,1);
   for(let i=shots.length-1;i>=0;i--)if(T-shots[i].t0>shots[i].life)shots.splice(i,1);
+  for(let i=particles.length-1;i>=0;i--)if(T-particles[i].t0>particles[i].life)particles.splice(i,1);
   updateHUD();
 }

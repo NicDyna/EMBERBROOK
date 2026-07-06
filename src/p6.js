@@ -11,6 +11,8 @@ function resize(){
   SCALE=clamp(Math.min(VW,VH)/(TILE*9),1.4,3.2);
 }
 let clickMark=null;
+let shakeMag=0,shakeT=-9999;
+function shake(m){shakeMag=Math.min(11,Math.max(shakeMag,m));shakeT=T;}
 function camera(){
   const W=world[P.map],mapW=W.w*TILE,mapH=W.h*TILE;
   let camx=P.px+16-VW/(2*SCALE),camy=P.py+16-VH/(2*SCALE);
@@ -23,9 +25,12 @@ function draw(){
   ctx.imageSmoothingEnabled=false;
   ctx.fillStyle='#14110d';ctx.fillRect(0,0,VW,VH);
   const{camx,camy}=camera();
+  let shx=0,shy=0;
+  if(shakeMag>0){const k=Math.max(0,1-(T-shakeT)/260)*shakeMag;
+    shx=(Math.random()*2-1)*k;shy=(Math.random()*2-1)*k;if(k<=0.15)shakeMag=0;}
   ctx.save();
   ctx.scale(SCALE,SCALE);
-  ctx.translate(-camx,-camy);
+  ctx.translate(-camx+shx,-camy+shy);
   const waterShift=Math.floor(T/600)%2;
   const x0=Math.max(0,Math.floor(camx/TILE)),x1=Math.min(W.w-1,Math.ceil((camx+VW/SCALE)/TILE));
   const y0=Math.max(0,Math.floor(camy/TILE)),y1=Math.min(W.h-1,Math.ceil((camy+VH/SCALE)/TILE));
@@ -185,10 +190,19 @@ function draw(){
     ctx.fillStyle=s.color;ctx.fillRect(x-2,y-2,4,4);
     ctx.fillStyle=s.color+'66';ctx.fillRect(x-1-(s.x1-s.x0)*0.04,y-1-(s.y1-s.y0)*0.04,3,3);
   }
+  /* spark particles (hits / kills) */
+  for(const p of particles){
+    const e=(T-p.t0)/1000, pr=(T-p.t0)/p.life;
+    const px=p.x+p.vx*e, py=p.y+p.vy*e+90*e*e;
+    ctx.globalAlpha=Math.max(0,1-pr);
+    ctx.fillStyle=p.color;ctx.fillRect(px-p.size/2,py-p.size/2,p.size,p.size);
+  }
+  ctx.globalAlpha=1;
   /* floaters */
-  ctx.font='bold 9px monospace';ctx.textAlign='center';
+  ctx.textAlign='center';
   for(const f of floaters){
     const pr=(T-f.t0)/f.life;
+    ctx.font='bold '+(f.size||9)+'px monospace';
     ctx.globalAlpha=1-pr;
     ctx.fillStyle='#000';ctx.fillText(f.txt,f.x+1,f.y-pr*18+1);
     ctx.fillStyle=f.color;ctx.fillText(f.txt,f.x,f.y-pr*18);

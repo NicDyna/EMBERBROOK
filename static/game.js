@@ -40,6 +40,7 @@ const RARITY=[
   {id:2,name:'Rare ',     color:'#6fb7ff',mult:1.25,w:100},
   {id:3,name:'Epic ',     color:'#c98bff',mult:1.45,w:25},
   {id:4,name:'Legendary ',color:'#f0c419',mult:1.70,w:5},
+  {id:5,name:'Unique ',    color:'#ff8a3a',mult:1.00,w:0}, // boss drops only (never rolled)
 ];
 function rollRarity(boost){ // boost shifts weight toward high tiers (bosses)
   const b=boost||0;
@@ -100,6 +101,27 @@ const GEAR={};
     }
   }
 })();
+/* ---------------- boss uniques (best-in-slot chase items with a perk) ----
+   Registered into GEAR so equip / stats / icons / paper-doll all work; they
+   drop only from their boss and wear the 'Unique' rarity (r=5). */
+const UNIQUES={
+  u_frostmaul:{name:'Frostmaul',line:'m',slot:'weapon',req:45,reqSkill:'attack',color:'#8fe0ff',
+    perk:'meleedmg',perkDesc:'+5% melee damage',stats:{acc:30,pow:27},spd:2400},
+  u_bandit_coat:{name:"Bandit King's Coat",line:'r',slot:'body',req:45,reqSkill:'defence',color:'#caa15a',
+    perk:'savearrow',perkDesc:'10% chance to save arrows',stats:{def:15,hp:22,rpow:5}},
+  u_warlord_bulwark:{name:"Warlord's Bulwark",line:'m',slot:'shield',req:45,reqSkill:'defence',color:'#d0a83a',
+    perk:'dmgred',perkDesc:'-5% damage taken',stats:{def:19,hp:16}},
+  u_pharaoh_sceptre:{name:"Pharaoh's Sceptre",line:'g',slot:'weapon',req:45,reqSkill:'magic',color:'#7af0c9',
+    perk:'saverune',perkDesc:'10% chance to save runes',stats:{acc:28,pow:25},spd:3000},
+};
+(function buildUniques(){
+  for(const id in UNIQUES){const u=UNIQUES[id];
+    const g={id,name:u.name,line:u.line,tier:6,slot:u.slot,req:u.req,reqSkill:u.reqSkill,
+             color:u.color,stats:{...u.stats},unique:true,perk:u.perk,perkDesc:u.perkDesc};
+    if(u.slot==='weapon'){g.spd=u.spd;if(u.line==='r')g.ammo='arrows';if(u.line==='g')g.ammo='runes';}
+    GEAR[id]=g;
+  }
+})();
 /* effective stats of an owned gear piece {id, r} */
 function gearStats(piece){
   const g=GEAR[piece.id]; if(!g)return{};
@@ -128,6 +150,18 @@ const CAPES={
 function capePerkActive(capeId){
   const worn=P.gear.cape&&P.gear.cape.id;
   return worn===capeId||worn==='cape_max';
+}
+/* generalized perk lookup: a perk effect is active if granted by the worn cape
+   (or Max Cape) or by any equipped unique. Effects:
+   acc, meleedmg, dmgred, savearrow, saverune, chop, mine */
+const CAPE_EFFECT={cape_attack:'acc',cape_strength:'meleedmg',cape_defence:'dmgred',
+  cape_ranged:'savearrow',cape_magic:'saverune',cape_woodcutting:'chop',cape_mining:'mine'};
+function perkActive(effect){
+  const worn=P.gear.cape&&P.gear.cape.id;
+  if(worn==='cape_max')return true;
+  if(worn&&CAPE_EFFECT[worn]===effect)return true;
+  for(const slot in P.gear){const pc=P.gear[slot];if(pc&&GEAR[pc.id]&&GEAR[pc.id].perk===effect)return true;}
+  return false;
 }
 
 /* ---------------- consumables & materials ---------------- */
@@ -275,19 +309,19 @@ const MOBS={
 
   /* ===== Dungeon bosses (big 2× sprite, ~5-min respawn, best loot) ===== */
   bandit_king:{name:'The Bandit King',lvl:16,hp:100,style:'melee',acc:18,pow:12,def:12,spd:2400,range:1,
-    aggro:true,xp:360,gold:[50,110],boss:true,respawn:300000,rarityBoost:2,
+    aggro:true,xp:360,gold:[50,110],boss:true,respawn:300000,rarityBoost:2,unique:'u_bandit_coat',
     loot:[{w:42,gear:{tierMin:2,tierMax:3}},{w:28,gold:[50,110]},{w:18,item:'meat_pie',q:[1,2]},
           {w:12,item:'gem',q:[1,1]},{w:16,item:'spider_silk',q:[2,4]}]},
   frost_giant:{name:'The Frost Giant',lvl:32,hp:190,style:'melee',acc:26,pow:16,def:24,spd:2800,range:1,
-    aggro:true,xp:640,gold:[90,200],boss:true,respawn:300000,rarityBoost:2,
+    aggro:true,xp:640,gold:[90,200],boss:true,respawn:300000,rarityBoost:2,unique:'u_frostmaul',
     loot:[{w:42,gear:{tierMin:3,tierMax:5}},{w:26,gold:[90,200]},{w:18,item:'gem',q:[1,2]},
           {w:14,item:'iron_ore',q:[2,4]},{w:18,item:'thick_fur',q:[2,4]}]},
   plains_warlord:{name:'The Plains Warlord',lvl:42,hp:220,style:'melee',acc:40,pow:24,def:30,spd:2400,range:1,
-    aggro:true,xp:900,gold:[140,300],boss:true,respawn:300000,rarityBoost:3,
+    aggro:true,xp:900,gold:[140,300],boss:true,respawn:300000,rarityBoost:3,unique:'u_warlord_bulwark',
     loot:[{w:44,gear:{tierMin:4,tierMax:6}},{w:24,gold:[140,300]},{w:18,item:'gem',q:[2,3]},
           {w:14,item:'ancient_dust',q:[2,4]},{w:18,item:'lion_fang',q:[2,4]}]},
   sand_pharaoh:{name:'The Sand Pharaoh',lvl:50,hp:260,style:'magic',acc:48,pow:30,def:36,spd:2600,range:5,
-    aggro:true,xp:1600,gold:[240,480],boss:true,respawn:300000,rarityBoost:3,
+    aggro:true,xp:1600,gold:[240,480],boss:true,respawn:300000,rarityBoost:3,unique:'u_pharaoh_sceptre',
     loot:[{w:46,gear:{tierMin:5,tierMax:6}},{w:22,gold:[240,480]},{w:18,item:'gem',q:[2,4]},
           {w:14,item:'ancient_dust',q:[4,7]},{w:20,item:'scarab_shell',q:[2,4]}]},
 };
@@ -850,7 +884,15 @@ function loginBonus(){
 
 /* ---------------- feedback ---------------- */
 const floaters=[];
-function floater(x,y,txt,color){floaters.push({x,y,txt,color,t0:T,life:1100});}
+function floater(x,y,txt,color,size){floaters.push({x,y,txt,color,t0:T,life:1100,size:size||9});}
+/* transient spark particles (hits, kills, damage) — rendered in p6 */
+const particles=[];
+function spawnParticles(x,y,color,n,power){
+  n=n||6;power=power||1;
+  for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,sp=(30+Math.random()*60)*power;
+    particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-30*power,t0:T,
+      life:360+Math.random()*180,color,size:1+(Math.random()*2|0)});}
+}
 function toast(msg,cls){
   const el=document.createElement('div');el.className='toast '+(cls||'');el.textContent=msg;
   $('toasts').appendChild(el);
@@ -876,7 +918,7 @@ function showXpBar(skill){
 }
 /* tiny WebAudio sfx */
 let AC=null,soundOn=true;
-function ensureAudio(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}}}
+function ensureAudio(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}}startAmbient();}
 function beep(freq,dur,type,vol,when){
   if(!AC||!soundOn)return;
   const o=AC.createOscillator(),g=AC.createGain();
@@ -903,8 +945,32 @@ function sfx(kind){
     case'equip':beep(300,.05,'square',.04);beep(420,.06,'square',.04,.05);break;
     case'coin':beep(700,.05,'triangle',.04);beep(880,.06,'triangle',.03,.04);break;
     case'die':beep(200,.2,'sawtooth',.06);beep(150,.25,'sawtooth',.05,.15);beep(100,.35,'sawtooth',.05,.3);break;
+    case'warp':beep(440,.08,'sine',.05);beep(660,.1,'sine',.05,.07);beep(880,.14,'sine',.04,.15);break;
   }
 }
+/* ---- subtle biome ambient pad (very low volume; follows the sound toggle) ---- */
+let AMB=null;
+function ambientFreq(){const m=P.map;
+  if(m.indexOf('dungeon')>=0)return 82;
+  if(m==='desert')return 98; if(m==='mountains')return 165;
+  if(m==='plains')return 131; if(m==='forest')return 123; return 110; /* town */}
+function startAmbient(){
+  if(!AC||!soundOn||AMB)return;
+  try{
+    const g=AC.createGain();g.gain.value=0.009;g.connect(AC.destination);
+    const f=ambientFreq();
+    const o1=AC.createOscillator();o1.type='sine';o1.frequency.value=f;o1.connect(g);
+    const o2=AC.createOscillator();o2.type='sine';o2.frequency.value=f*1.006;o2.connect(g);
+    const lfo=AC.createOscillator();lfo.type='sine';lfo.frequency.value=0.1;
+    const lg=AC.createGain();lg.gain.value=0.005;lfo.connect(lg);lg.connect(g.gain);
+    o1.start();o2.start();lfo.start();
+    AMB={o1,o2,lfo,g};
+  }catch(e){}
+}
+function stopAmbient(){if(AMB){try{AMB.o1.stop();AMB.o2.stop();AMB.lfo.stop();}catch(e){}AMB=null;}}
+function ambientBiome(){if(AMB&&AC){try{const f=ambientFreq();
+  AMB.o1.frequency.setTargetAtTime(f,AC.currentTime,0.5);
+  AMB.o2.frequency.setTargetAtTime(f*1.006,AC.currentTime,0.5);}catch(e){}}}
 /* p4: procedural pixel art — tiles, paper-doll player (gear tinting),
        mobs & bosses, ground-drop sprites, inventory icons.
        All sprites use a 16px logical grid drawn 2x onto 32px canvases. */
@@ -1535,6 +1601,7 @@ function switchMap(ex){
   P.path=[];P.moving=null;P.action=null;
   world[P.map].mobs.forEach(m=>m.aggro=false);
   if(REGION_ORDER.includes(P.map)){if(!P.reached)P.reached={};P.reached[P.map]=true;}
+  ambientBiome();
   const zl=$('zone');zl.textContent=MAPS[P.map].name;
   zl.classList.remove('go');void zl.offsetWidth;zl.classList.add('go');
   save();
@@ -1555,8 +1622,9 @@ function warpTo(dest){
   P.path=[];P.moving=null;P.action=null;
   world[dest].mobs.forEach(m=>m.aggro=false);
   if(REGION_ORDER.includes(dest)){if(!P.reached)P.reached={};P.reached[dest]=true;}
+  ambientBiome();
   const zl=$('zone');zl.textContent=MAPS[dest].name;zl.classList.remove('go');void zl.offsetWidth;zl.classList.add('go');
-  sfx('level');save();
+  sfx('warp');save();
 }
 
 /* ---------------- current combat mode from weapon ---------------- */
@@ -1599,8 +1667,8 @@ function playerAttack(){
           + (m==='ranged'?b.rpow:m==='magic'?b.mpow:0)*0.5;
   if(m==='melee'&&P.style==='accurate')acc*=1.12;
   if(m==='melee'&&P.style==='aggressive')pow*=1.1;
-  if(capePerkActive('cape_attack'))acc*=1.05;
-  if(m==='melee'&&capePerkActive('cape_strength'))pow*=1.05;
+  if(perkActive('acc'))acc*=1.05;
+  if(m==='melee'&&perkActive('meleedmg'))pow*=1.05;
   return{acc,maxHit:Math.max(1,Math.floor(pow)),mode:m};
 }
 function playerDefence(){
@@ -1699,7 +1767,7 @@ function pickupDrop(d){
         toast('+ '+nm,(it.gear.r||0)>=2?'gold':'drop');
         if((it.gear.r||0)>=3){sfx('rare');
           P.stats.bestDrop=nm;
-          if(it.gear.r===4){P.stats.legendaries++;levelFlash('LEGENDARY! '+nm);}
+          if(it.gear.r>=4){P.stats.legendaries++;levelFlash((it.gear.r===5?'UNIQUE! ':'LEGENDARY! ')+nm);}
         }else sfx('loot');
       }else{remain.push(it);toast('Inventory full','bad');}
     }else{
@@ -1735,6 +1803,8 @@ function rollLoot(mob){
       out.items.push({gear:{id:`g_${line}_${tier}_${slot}`,r:rollRarity(d.rarityBoost||0)}});
     }
   }
+  /* boss signature drop: ~14% chance to also drop its unique (rarity 5) */
+  if(d.unique&&GEAR[d.unique]&&Math.random()<0.14)out.items.push({gear:{id:d.unique,r:5}});
   return out;
 }
 
@@ -1787,8 +1857,8 @@ function doAction(){
     if(!invGet(d.item)&&P.inv.length>=INV_CAP){toast('Inventory full! Bank or sell in town.');P.action=null;return;}
     const tool=d.skill==='woodcutting'?TOOLS[P.tools.axe]:TOOLS[P.tools.pick];
     let speed=Math.max(600,d.time*tool.speed*(1-lvl(d.skill)*0.006));
-    if(d.skill==='woodcutting'&&capePerkActive('cape_woodcutting'))speed*=0.9;
-    if(d.skill==='mining'&&capePerkActive('cape_mining'))speed*=0.9;
+    if(d.skill==='woodcutting'&&perkActive('chop'))speed*=0.9;
+    if(d.skill==='mining'&&perkActive('mine'))speed*=0.9;
     P.action.prog=(P.action.prog||0)+FRAME_DT;
     if(P.action.prog>=speed){
       P.action.prog=0;
@@ -1814,8 +1884,8 @@ function doAction(){
       const ammo=ammoFor(mode);
       if(ammo){
         if(invCount(ammo)<=0){toast('Out of '+ITEMS[ammo].name+'!','bad');P.action=null;return;}
-        const saveCape=mode==='ranged'?'cape_ranged':'cape_magic';
-        if(!(capePerkActive(saveCape)&&Math.random()<0.10))removeItem(ammo,1);
+        const saveEff=mode==='ranged'?'savearrow':'saverune';
+        if(!(perkActive(saveEff)&&Math.random()<0.10))removeItem(ammo,1);
         if(invCount(ammo)===50)toast('Only 50 '+ITEMS[ammo].name+' left','bad');
       }
       P.atkT=T;
@@ -1828,8 +1898,10 @@ function doAction(){
       else if(mode==='magic'){shoot(P.px+16,P.py+8,t.px+16,t.py+8,'#b06fd1');sfx('zap');}
       else sfx('hit');
       t.hp-=dmg;
-      floater(t.px+16,t.py-6,dmg>0?'-'+dmg:'miss',dmg>0?'#e85b4a':'#9aa');
+      const big=dmg>0&&dmg>=atk.maxHit*0.75;
+      floater(t.px+16,t.py-6,dmg>0?'-'+dmg:'miss',dmg>0?(big?'#ffd24a':'#ffe3a0'):'#9aa',dmg>0?(big?13:10):9);
       if(dmg>0){
+        spawnParticles(t.px+16,t.py+8,mode==='magic'?'#c9a5ff':mode==='ranged'?'#e8e2c8':'#ffd27a',big?9:5,big?1.6:1);
         gainXp(trainSkill(),dmg*4);
         if(mode!=='melee')dailyEvent('stylehit',null,1);
       }
@@ -1844,10 +1916,11 @@ function killMob(m){
   const loot=rollLoot(m);
   spawnDrop(P.map,m.tx,m.ty,loot);
   sfx('kill');
+  spawnParticles(m.px+16,m.py+10,d.boss?'#ffcf5a':'#e8b070',d.boss?22:12,d.boss?2.2:1.4);
   P.stats.kills++;
   if(d.boss){
     P.stats.bossKills[m.type]=(P.stats.bossKills[m.type]||0)+1;
-    levelFlash(d.name+' defeated!');
+    levelFlash(d.name+' defeated!');shake(6);
   }
   questEvent('kill',m.type,P.map);
   const next=nearestMob(m.type,P.tx,P.ty);
@@ -1855,10 +1928,12 @@ function killMob(m){
   save();
 }
 function hurtPlayer(dmg){
-  if(capePerkActive('cape_defence'))dmg=Math.max(0,Math.round(dmg*0.95));
+  if(perkActive('dmgred'))dmg=Math.max(0,Math.round(dmg*0.95));
   if(dmg<=0){floater(P.px+16,P.py-10,'miss','#9aa');return;}
   P.hp-=dmg;P.lastHurt=T;sfx('hurt');
-  floater(P.px+16,P.py-10,'-'+dmg,'#e85b4a');
+  shake(Math.min(9,2.5+dmg*0.5));
+  spawnParticles(P.px+16,P.py+8,'#e85b4a',5,1);
+  floater(P.px+16,P.py-10,'-'+dmg,'#ff6a5a',11);
   if(P.hp<=0)die();
 }
 /* death: carried items drop as a gravestone; equipped gear is kept.
@@ -1985,6 +2060,7 @@ function update(dt){
   }
   for(let i=floaters.length-1;i>=0;i--)if(T-floaters[i].t0>floaters[i].life)floaters.splice(i,1);
   for(let i=shots.length-1;i>=0;i--)if(T-shots[i].t0>shots[i].life)shots.splice(i,1);
+  for(let i=particles.length-1;i>=0;i--)if(T-particles[i].t0>particles[i].life)particles.splice(i,1);
   updateHUD();
 }
 /* p6: rendering & HUD — camera, tile pass, ground drops (rarity glow),
@@ -2000,6 +2076,8 @@ function resize(){
   SCALE=clamp(Math.min(VW,VH)/(TILE*9),1.4,3.2);
 }
 let clickMark=null;
+let shakeMag=0,shakeT=-9999;
+function shake(m){shakeMag=Math.min(11,Math.max(shakeMag,m));shakeT=T;}
 function camera(){
   const W=world[P.map],mapW=W.w*TILE,mapH=W.h*TILE;
   let camx=P.px+16-VW/(2*SCALE),camy=P.py+16-VH/(2*SCALE);
@@ -2012,9 +2090,12 @@ function draw(){
   ctx.imageSmoothingEnabled=false;
   ctx.fillStyle='#14110d';ctx.fillRect(0,0,VW,VH);
   const{camx,camy}=camera();
+  let shx=0,shy=0;
+  if(shakeMag>0){const k=Math.max(0,1-(T-shakeT)/260)*shakeMag;
+    shx=(Math.random()*2-1)*k;shy=(Math.random()*2-1)*k;if(k<=0.15)shakeMag=0;}
   ctx.save();
   ctx.scale(SCALE,SCALE);
-  ctx.translate(-camx,-camy);
+  ctx.translate(-camx+shx,-camy+shy);
   const waterShift=Math.floor(T/600)%2;
   const x0=Math.max(0,Math.floor(camx/TILE)),x1=Math.min(W.w-1,Math.ceil((camx+VW/SCALE)/TILE));
   const y0=Math.max(0,Math.floor(camy/TILE)),y1=Math.min(W.h-1,Math.ceil((camy+VH/SCALE)/TILE));
@@ -2174,10 +2255,19 @@ function draw(){
     ctx.fillStyle=s.color;ctx.fillRect(x-2,y-2,4,4);
     ctx.fillStyle=s.color+'66';ctx.fillRect(x-1-(s.x1-s.x0)*0.04,y-1-(s.y1-s.y0)*0.04,3,3);
   }
+  /* spark particles (hits / kills) */
+  for(const p of particles){
+    const e=(T-p.t0)/1000, pr=(T-p.t0)/p.life;
+    const px=p.x+p.vx*e, py=p.y+p.vy*e+90*e*e;
+    ctx.globalAlpha=Math.max(0,1-pr);
+    ctx.fillStyle=p.color;ctx.fillRect(px-p.size/2,py-p.size/2,p.size,p.size);
+  }
+  ctx.globalAlpha=1;
   /* floaters */
-  ctx.font='bold 9px monospace';ctx.textAlign='center';
+  ctx.textAlign='center';
   for(const f of floaters){
     const pr=(T-f.t0)/f.life;
+    ctx.font='bold '+(f.size||9)+'px monospace';
     ctx.globalAlpha=1-pr;
     ctx.fillStyle='#000';ctx.fillText(f.txt,f.x+1,f.y-pr*18+1);
     ctx.fillStyle=f.color;ctx.fillText(f.txt,f.x,f.y-pr*18);
@@ -2299,7 +2389,8 @@ function invInfoHtml(i){
     const chk=canEquip(s.gear);
     return '<b style="color:'+gearColor(s.gear)+'">'+esc(gearName(s.gear))+'</b><br>'+
       esc(stats)+'<br><span class="hint">'+SKILLS[g.reqSkill].name+' '+g.req+
-      (g.spd?' · speed '+(g.spd/1000)+'s':'')+ (g.ammo?' · uses '+ITEMS[g.ammo].name:'')+'</span><br>'+
+      (g.spd?' · speed '+(g.spd/1000)+'s':'')+ (g.ammo?' · uses '+ITEMS[g.ammo].name:'')+'</span>'+
+      (g.unique&&g.perkDesc?'<br><span style="color:#ff8a3a">✦ '+esc(g.perkDesc)+'</span>':'')+'<br>'+
       (chk.ok?'<button class="btn small" data-act="equip" data-arg="'+i+'">Equip</button>'
              :'<span class="tag locked">'+esc(chk.why)+'</span>')+
       ' <button class="btn small danger" data-act="drop" data-arg="'+i+'">Drop</button>';
@@ -2433,12 +2524,35 @@ function openBank(){
   openPanel('Bank of Emberbrook',h);
 }
 
+/* ---------------- reforge (raise a piece's rarity with materials) --------
+   Ladder gated by biome materials (Legendary needs the desert shell); gold
+   scales with the piece's tier. Uniques are already best and can't reforge. */
+const REFORGE=[null,
+  {gold:150, mats:{iron_ore:3, spider_silk:1}},        // →Uncommon
+  {gold:500, mats:{iron_ore:5, gem:1, thick_fur:2}},   // →Rare
+  {gold:1500,mats:{gem:3, lion_fang:2}},               // →Epic
+  {gold:4000,mats:{gem:5, scarab_shell:3}}];            // →Legendary
+function canReforge(piece){
+  const g=GEAR[piece.id],r=piece.r||0;
+  if(!g||g.unique||r>=4)return null;
+  const c=REFORGE[r+1],gold=Math.round(c.gold*g.tier);
+  const ok=P.gold>=gold && Object.entries(c.mats).every(([id,q])=>invCount(id)>=q);
+  return {gold, mats:c.mats, toR:r+1, ok};
+}
+function doReforge(i){
+  const s=P.inv[i];if(!s||!s.gear)return false;
+  const c=canReforge(s.gear);if(!c||!c.ok)return false;
+  P.gold-=c.gold;for(const id in c.mats)removeItem(id,c.mats[id]);
+  s.gear.r=c.toR;sfx('rare');updateHUD();save();return true;
+}
+
 /* ---------------- shop ---------------- */
 let shopTab='buy';
 function openShop(){
   let h='<div class="stylerow">'+
     '<button class="btn small'+(shopTab==='buy'?' sel':'')+'" data-act="shoptab" data-arg="buy">Buy</button>'+
-    '<button class="btn small'+(shopTab==='sell'?' sel':'')+'" data-act="shoptab" data-arg="sell">Sell</button></div>';
+    '<button class="btn small'+(shopTab==='sell'?' sel':'')+'" data-act="shoptab" data-arg="sell">Sell</button>'+
+    '<button class="btn small'+(shopTab==='reforge'?' sel':'')+'" data-act="shoptab" data-arg="reforge">Reforge</button></div>';
   if(shopTab==='buy'){
     h+='<div class="sect">Starter gear (better gear drops from monsters)</div>';
     for(const L of['m','r','g']){
@@ -2462,7 +2576,7 @@ function openShop(){
         (owned?'<span class="tag done">owned</span>'
         :'<button class="btn small'+(P.gold<t.price?' dim':'')+'" data-act="buytool" data-arg="'+id+'">'+t.price+'g</button>')+'</div>';
     }
-  }else{
+  }else if(shopTab==='sell'){
     h+='<div class="sect">Tap a stack or piece to sell</div><div class="grid small">';
     let any=false;
     P.inv.forEach((s,i)=>{
@@ -2471,12 +2585,24 @@ function openShop(){
     });
     if(!any)h+='<div class="hint" style="grid-column:1/-1">Nothing to sell — go adventuring!</div>';
     h+='</div><div class="sect">Bulk sell gear by rarity</div><div class="stylerow" style="flex-wrap:wrap">';
-    for(let r=0;r<RARITY.length;r++){
+    for(let r=0;r<5;r++){ /* never bulk-sell Uniques (r=5) */
       const n=P.inv.filter(s=>s.gear&&(s.gear.r||0)===r).length;
       if(n)h+='<button class="btn small" data-act="bulksell" data-arg="'+r+'" style="border-color:'+RARITY[r].color+'">'+
         (RARITY[r].name||'Common ').trim()+' × '+n+'</button>';
     }
     h+='</div>';
+  }else{ /* reforge */
+    h+='<div class="sect">Reforge — raise a piece\'s rarity with materials</div>';
+    let any=false;
+    P.inv.forEach((s,i)=>{
+      if(!s.gear)return;const c=canReforge(s.gear);if(!c)return;any=true;
+      const matStr=Object.entries(c.mats).map(([id,q])=>q+'× '+ITEMS[id].name+
+        (invCount(id)>=q?'':' <span style="color:#f0b0a5">('+invCount(id)+')</span>')).join(', ');
+      h+='<div class="qrow"><span><img class="mini" src="'+iconURL(s.gear.id)+'" alt=""> '+esc(gearName(s.gear))+
+        ' <span class="hint">→ '+RARITY[c.toR].name.trim()+'</span><br><span class="hint">'+c.gold+'g · '+matStr+'</span></span>'+
+        '<button class="btn small'+(c.ok?'':' dim')+'" data-act="reforge" data-arg="'+i+'">Reforge</button></div>';
+    });
+    if(!any)h+='<div class="hint">No eligible gear here. Reforging raises Common→Legendary using ore, gems, and biome materials (silk → fur → fang → shell).</div>';
   }
   openPanel("Torvald's Forge — gold: "+P.gold,h);
 }
@@ -2633,6 +2759,12 @@ $('pbody').addEventListener('click',ev=>{
     if(n){addGold(g);sfx('coin');toast('Sold '+n+' pieces for '+g+'g','gold');}
     openShop();
   }
+  else if(act==='reforge'){
+    const s=P.inv[+arg];
+    if(s&&s.gear&&doReforge(+arg))toast('Reforged into '+gearName(s.gear)+'!','gold');
+    else toast('Not enough materials or gold.','bad');
+    openShop();
+  }
   else if(act==='buygear'){
     const g=GEAR[arg],pr=gearPrice(g);
     if(P.gold<pr){toast('Not enough gold.');return;}
@@ -2667,7 +2799,7 @@ $('pbody').addEventListener('click',ev=>{
       toast('Daily reward: +'+t.gold+'g','gold');save();openQuestBoard();
     }
   }
-  else if(act==='togglesound'){soundOn=!soundOn;openSettings();}
+  else if(act==='togglesound'){soundOn=!soundOn;if(soundOn){ensureAudio();startAmbient();}else stopAmbient();openSettings();}
   else if(act==='savenow'){save();toast('Game saved.');}
   else if(act==='syncnow'){
     const tok=($('tokinput')&&$('tokinput').value.trim())||'';
