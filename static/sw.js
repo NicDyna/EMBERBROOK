@@ -1,6 +1,6 @@
 // Emberbrook service worker — network-first for app files so updates land
 // immediately; cached copies serve as the offline fallback.
-const CACHE = 'emberbrook-v2.5.0'; // bump on every release
+const CACHE = 'emberbrook-v2.6.0'; // bump on every release
 const APP_FILES = ['/', '/game.js', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -20,7 +20,9 @@ self.addEventListener('fetch', e => {
   if (url.origin !== location.origin) return;
   if (url.pathname.startsWith('/api/')) return; // sync calls: network only
   e.respondWith(
-    fetch(e.request)
+    // no-store so an online client always gets the newest build (true
+    // network-first); the SW cache below is only the offline fallback.
+    fetch(e.request, {cache: 'no-store'})
       .then(res => {
         const copy = res.clone();
         caches.open(CACHE).then(c => c.put(e.request, copy));

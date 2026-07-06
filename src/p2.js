@@ -36,15 +36,15 @@ function lootRoll(table){
    roll + rarity boost, faster respawn). Both live inside dungeons. */
 const MOBS={
   /* ===== Dense Forest — Whisperwood (lvl 3–12) ===== */
-  spider:{name:'Forest Spider',lvl:4,hp:14,style:'melee',acc:7,pow:4,def:3,spd:2400,range:1,
+  spider:{name:'Forest Spider',lvl:4,hp:12,style:'melee',acc:7,pow:4,def:3,spd:2400,range:1,
     aggro:false,xp:24,gold:[2,7],
     loot:[{w:48,gold:[2,7]},{w:20,item:'bone',q:[1,1]},{w:12,item:'bread',q:[1,1]},
-          {w:10,gear:{tierMin:1,tierMax:2}},{w:10,item:'cooked_meat',q:[1,1]}]},
-  boar:{name:'Wild Boar',lvl:6,hp:22,style:'melee',acc:9,pow:6,def:5,spd:2200,range:1,
+          {w:10,gear:{tierMin:1,tierMax:2}},{w:10,item:'cooked_meat',q:[1,1]},{w:12,item:'spider_silk',q:[1,2]}]},
+  boar:{name:'Wild Boar',lvl:6,hp:16,style:'melee',acc:8,pow:5,def:4,spd:2400,range:1,
     aggro:true,xp:34,gold:[0,4],
     loot:[{w:44,item:'wolf_pelt',q:[1,1]},{w:24,item:'cooked_meat',q:[1,2]},
           {w:20,item:'bone',q:[1,2]},{w:12,gear:{tierMin:1,tierMax:2}}]},
-  bandit:{name:'Forest Bandit',lvl:9,hp:28,style:'ranged',acc:12,pow:7,def:6,spd:2800,range:4,
+  bandit:{name:'Forest Bandit',lvl:9,hp:22,style:'ranged',acc:11,pow:6,def:5,spd:2800,range:4,
     aggro:true,xp:46,gold:[6,16],
     loot:[{w:34,gold:[6,16]},{w:22,item:'arrows',q:[6,14]},{w:16,item:'bread',q:[1,2]},
           {w:16,gear:{tierMin:1,tierMax:2}},{w:12,item:'copper_ore',q:[1,1]}]},
@@ -53,12 +53,12 @@ const MOBS={
   frost_wolf:{name:'Frost Wolf',lvl:15,hp:40,style:'melee',acc:16,pow:11,def:10,spd:2100,range:1,
     aggro:true,xp:72,gold:[4,12],
     loot:[{w:40,item:'wolf_pelt',q:[1,2]},{w:24,item:'cooked_meat',q:[1,2]},
-          {w:18,item:'bone',q:[1,3]},{w:18,gear:{tierMin:2,tierMax:3}}]},
+          {w:18,item:'bone',q:[1,3]},{w:18,gear:{tierMin:2,tierMax:3}},{w:16,item:'thick_fur',q:[1,2]}]},
   ice_sprite:{name:'Ice Sprite',lvl:18,hp:36,style:'magic',acc:19,pow:13,def:10,spd:2800,range:4,
     aggro:true,xp:92,gold:[8,20],
     loot:[{w:30,gold:[8,20]},{w:24,item:'runes',q:[6,16]},{w:18,item:'gem',q:[1,1]},
           {w:18,gear:{tierMin:2,tierMax:4}},{w:10,item:'meat_pie',q:[1,1]}]},
-  snow_troll:{name:'Snow Troll',lvl:22,hp:68,style:'melee',acc:22,pow:15,def:18,spd:2800,range:1,
+  snow_troll:{name:'Snow Troll',lvl:20,hp:56,style:'melee',acc:20,pow:13,def:15,spd:2800,range:1,
     aggro:true,xp:130,gold:[10,26],
     loot:[{w:30,gold:[10,26]},{w:22,item:'iron_ore',q:[1,2]},{w:20,gear:{tierMin:3,tierMax:4}},
           {w:16,item:'bone',q:[2,4]},{w:12,item:'gem',q:[1,1]}]},
@@ -67,7 +67,7 @@ const MOBS={
   steppe_lion:{name:'Steppe Lion',lvl:26,hp:74,style:'melee',acc:25,pow:16,def:16,spd:2200,range:1,
     aggro:true,xp:150,gold:[12,30],
     loot:[{w:34,item:'wolf_pelt',q:[1,3]},{w:24,item:'cooked_meat',q:[2,3]},
-          {w:20,gear:{tierMin:3,tierMax:4}},{w:12,item:'gem',q:[1,1]},{w:10,item:'meat_pie',q:[1,1]}]},
+          {w:20,gear:{tierMin:3,tierMax:4}},{w:12,item:'gem',q:[1,1]},{w:10,item:'meat_pie',q:[1,1]},{w:14,item:'lion_fang',q:[1,2]}]},
   war_hawk:{name:'War Hawk',lvl:30,hp:58,style:'ranged',acc:28,pow:18,def:15,spd:2600,range:4,
     aggro:true,xp:176,gold:[14,34],
     loot:[{w:30,gold:[14,34]},{w:26,item:'arrows',q:[12,28]},{w:20,gear:{tierMin:3,tierMax:5}},
@@ -78,15 +78,15 @@ const MOBS={
           {w:16,item:'ancient_dust',q:[1,2]},{w:12,item:'gem',q:[1,2]}]},
 
   /* ===== Ashen Desert — dunes (lvl 38–49) ===== */
-  scorpion:{name:'Sand Scorpion',lvl:38,hp:92,style:'melee',acc:36,pow:23,def:24,spd:2400,range:1,
+  scorpion:{name:'Sand Scorpion',lvl:38,hp:80,style:'melee',acc:34,pow:20,def:20,spd:2400,range:1,
     aggro:true,xp:212,gold:[16,40],
     loot:[{w:30,gold:[16,40]},{w:24,item:'gem',q:[1,2]},{w:20,gear:{tierMin:4,tierMax:5}},
-          {w:14,item:'bone',q:[2,4]},{w:12,item:'stew',q:[1,1]}]},
+          {w:14,item:'bone',q:[2,4]},{w:12,item:'stew',q:[1,1]},{w:16,item:'scarab_shell',q:[1,2]}]},
   sand_wraith:{name:'Sand Wraith',lvl:42,hp:86,style:'magic',acc:40,pow:26,def:24,spd:2800,range:4,
     aggro:true,xp:250,gold:[20,50],
     loot:[{w:28,gold:[20,50]},{w:24,item:'runes',q:[14,30]},{w:20,item:'ancient_dust',q:[1,3]},
           {w:18,gear:{tierMin:4,tierMax:6}},{w:10,item:'gem',q:[1,2]}]},
-  dune_raider:{name:'Dune Raider',lvl:45,hp:98,style:'ranged',acc:44,pow:28,def:26,spd:2600,range:4,
+  dune_raider:{name:'Dune Raider',lvl:44,hp:86,style:'ranged',acc:42,pow:25,def:23,spd:2600,range:4,
     aggro:true,xp:280,gold:[24,56],
     loot:[{w:28,gold:[24,56]},{w:24,item:'arrows',q:[18,40]},{w:20,gear:{tierMin:5,tierMax:6}},
           {w:16,item:'gem',q:[1,2]},{w:12,item:'stew',q:[1,2]}]},
@@ -110,23 +110,32 @@ const MOBS={
           {w:14,item:'ancient_dust',q:[3,5]}]},
 
   /* ===== Dungeon bosses (big 2× sprite, ~5-min respawn, best loot) ===== */
-  bandit_king:{name:'The Bandit King',lvl:16,hp:120,style:'melee',acc:18,pow:12,def:12,spd:2400,range:1,
+  bandit_king:{name:'The Bandit King',lvl:16,hp:100,style:'melee',acc:18,pow:12,def:12,spd:2400,range:1,
     aggro:true,xp:360,gold:[50,110],boss:true,respawn:300000,rarityBoost:2,
     loot:[{w:42,gear:{tierMin:2,tierMax:3}},{w:28,gold:[50,110]},{w:18,item:'meat_pie',q:[1,2]},
-          {w:12,item:'gem',q:[1,1]}]},
-  frost_giant:{name:'The Frost Giant',lvl:32,hp:260,style:'melee',acc:26,pow:18,def:24,spd:2800,range:1,
+          {w:12,item:'gem',q:[1,1]},{w:16,item:'spider_silk',q:[2,4]}]},
+  frost_giant:{name:'The Frost Giant',lvl:32,hp:190,style:'melee',acc:26,pow:16,def:24,spd:2800,range:1,
     aggro:true,xp:640,gold:[90,200],boss:true,respawn:300000,rarityBoost:2,
     loot:[{w:42,gear:{tierMin:3,tierMax:5}},{w:26,gold:[90,200]},{w:18,item:'gem',q:[1,2]},
-          {w:14,item:'iron_ore',q:[2,4]}]},
-  plains_warlord:{name:'The Plains Warlord',lvl:42,hp:300,style:'melee',acc:40,pow:26,def:30,spd:2400,range:1,
+          {w:14,item:'iron_ore',q:[2,4]},{w:18,item:'thick_fur',q:[2,4]}]},
+  plains_warlord:{name:'The Plains Warlord',lvl:42,hp:220,style:'melee',acc:40,pow:24,def:30,spd:2400,range:1,
     aggro:true,xp:900,gold:[140,300],boss:true,respawn:300000,rarityBoost:3,
     loot:[{w:44,gear:{tierMin:4,tierMax:6}},{w:24,gold:[140,300]},{w:18,item:'gem',q:[2,3]},
-          {w:14,item:'ancient_dust',q:[2,4]}]},
-  sand_pharaoh:{name:'The Sand Pharaoh',lvl:50,hp:360,style:'magic',acc:50,pow:34,def:36,spd:2600,range:5,
+          {w:14,item:'ancient_dust',q:[2,4]},{w:18,item:'lion_fang',q:[2,4]}]},
+  sand_pharaoh:{name:'The Sand Pharaoh',lvl:50,hp:260,style:'magic',acc:48,pow:30,def:36,spd:2600,range:5,
     aggro:true,xp:1600,gold:[240,480],boss:true,respawn:300000,rarityBoost:3,
     loot:[{w:46,gear:{tierMin:5,tierMax:6}},{w:22,gold:[240,480]},{w:18,item:'gem',q:[2,4]},
-          {w:14,item:'ancient_dust',q:[4,7]}]},
+          {w:14,item:'ancient_dust',q:[4,7]},{w:20,item:'scarab_shell',q:[2,4]}]},
 };
+
+/* region order (overworld chain) + per-biome overworld gear-line bias.
+   Fodder in a region drops that line so each biome has a gear identity and the
+   player naturally collects all three lines across the journey (melee → ranged
+   → magic → ranged); dungeon bosses/semis ignore this and drop any line. */
+const REGION_ORDER=['forest','mountains','plains','desert'];
+const BIOME_LINE={forest:'m',forest_dungeon:'m',mountains:'r',mountains_dungeon:'r',
+  plains:'g',plains_dungeon:'g',desert:'r',desert_dungeon:'r'};
+const BIOME_MAT={forest:'spider_silk',mountains:'thick_fur',plains:'lion_fang',desert:'scarab_shell'};
 
 /* ---------------- NPCs & dialogue ---------------- */
 const NPCS={
@@ -209,7 +218,7 @@ const MAPS={
  plains_dungeon:{name:'Sunken Barrow',ground:',',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
  desert_dungeon:{name:"Pharaoh's Tomb",ground:',',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
 };
-const BLOCKED=new Set(['X','R','W','F','#','Q','U','S','~','H','B','K','k']);
+const BLOCKED=new Set(['X','R','W','F','#','Q','U','S','~','H','B','K','k','V','N']);
 
 /* ---- generate the St. Vith town grid: egg-shaped stone wall + one south gate
    Interior is walkable grass/road; the egg ring is now a solid WALL 'K'
@@ -273,13 +282,13 @@ const BLOCKED=new Set(['X','R','W','F','#','Q','U','S','~','H','B','K','k']);
    {id:'forest',ground:'.',edge:'F',north:'town',south:'mountains',dungeon:'forest_dungeon',
     res:[['T',34],['O',12],['C',8]],decor:[['X',6]],water:2,
     mobs:{spider:9,boar:6,bandit:5}},
-   {id:'mountains',ground:'s',edge:'X',north:'forest',south:'plains',dungeon:'mountains_dungeon',
+   {id:'mountains',ground:'s',edge:'V',north:'forest',south:'plains',dungeon:'mountains_dungeon',
     res:[['Y',20],['I',10],['Z',6]],decor:[['X',34]],water:0,
     mobs:{frost_wolf:8,ice_sprite:6,snow_troll:5}},
    {id:'plains',ground:'a',edge:'X',north:'mountains',south:'desert',dungeon:'plains_dungeon',
     res:[['T',14],['I',8]],decor:[['X',10]],water:3,
     mobs:{steppe_lion:8,war_hawk:6,nomad:5}},
-   {id:'desert',ground:'d',edge:'X',north:'plains',south:null,dungeon:'desert_dungeon',
+   {id:'desert',ground:'d',edge:'N',north:'plains',south:null,dungeon:'desert_dungeon',
     res:[['Z',9]],decor:[['k',18],['X',12]],water:2,
     mobs:{scorpion:8,sand_wraith:6,dune_raider:5}},
   ];

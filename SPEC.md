@@ -23,14 +23,16 @@ Attack, Strength, Defence, Ranged, Magic, Woodcutting, Mining.
 - Weapon speeds: melee 2400 ms, bow/staff 3000 ms.
 - Ranges: melee 1, bow 4, staff 5 tiles. Ranged/magic attackers hold
   position at range; mobs with ranged/magic styles do the same.
-- Combat triangle: melee > ranged > magic > melee. Advantage = ×1.25 damage
-  and +10% accuracy; disadvantage = ×0.8 damage and −10% accuracy.
+- Combat triangle: melee > ranged > magic > melee. Advantage = ×1.18 damage
+  and +7% accuracy; disadvantage = ×0.88 damage and −7% accuracy (softened so
+  fighting off-style is a mild penalty, not a death sentence).
 - Ammo: bows consume Arrows, staves consume Runes (stackables, shop-bought).
   Out of ammo stops the attack. Low-ammo warning at 50.
 - Healing: food only (Bread 6 / Cooked Meat 8 / Meat Pie 14 / Stew 22, with
   a 1.2 s attack delay after eating) plus slow out-of-combat regen
-  (1 HP / 3 s after 4 s unhurt). Base HP is flat 10; all extra HP comes
-  from gear.
+  (1 HP / 3 s after 4 s unhurt). Base HP is flat 14; the rest comes from gear
+  (armour HP scales with tier). New heroes start with a bronze weapon + body +
+  legs so the first region is survivable.
 
 ## Gear
 - 6 slots: weapon, shield, helmet, body, legs, cape.
@@ -52,6 +54,10 @@ Attack, Strength, Defence, Ranged, Magic, Woodcutting, Mining.
 ## Loot & death
 - Kills drop loot on the ground (RS-style): tap to walk over and pick up.
   Drops merge per tile, despawn after 90 s of game time, persist in the save.
+- Biome-specific drops: each region's overworld fodder drops that region's
+  gear line (forest→metal, mountains→ranged, plains→magic, desert→ranged) plus
+  a signature material (Spider Silk / Thick Fur / Lion Fang / Scarab Shell);
+  dungeon bosses/semis ignore the bias and drop any line (top-tier jackpots).
 - Death: carried inventory + gold drop as a gravestone at the death tile;
   equipped gear is kept. The gravestone lasts 2 minutes of *in-game* time
   (timer pauses when the game is closed) and is persisted in the save.
@@ -74,6 +80,8 @@ Frost Giant), Sunken Barrow (Barrow Wight / Plains Warlord), and Pharaoh's
 Tomb (Tomb Guardian / **Sand Pharaoh**, the final boss).
 Bosses: big 2× sprites, ~5-min respawns, 2 loot rolls + rarity boost.
 Semi-bosses: elites (double loot roll + rarity boost, 2-min respawn).
+Fast travel (🏠): home to town + any region reached on foot, blocked while a
+mob is attacking you; dungeons are entered from inside their region.
 
 ## Retention & goals
 - 7 linear quests (the last four clear each region's dungeon boss, ending

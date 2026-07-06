@@ -21,9 +21,29 @@ function switchMap(ex){
   P.map=ex.map;P.tx=ex.tx;P.ty=ex.ty;P.px=P.tx*TILE;P.py=P.ty*TILE;
   P.path=[];P.moving=null;P.action=null;
   world[P.map].mobs.forEach(m=>m.aggro=false);
+  if(REGION_ORDER.includes(P.map)){if(!P.reached)P.reached={};P.reached[P.map]=true;}
   const zl=$('zone');zl.textContent=MAPS[P.map].name;
   zl.classList.remove('go');void zl.offsetWidth;zl.classList.add('go');
   save();
+}
+
+/* ---------------- fast travel ----------------
+   Home to town + any region already reached on foot; blocked while a mob is
+   actively attacking you (can't teleport out of a fight). Arrives at the safe
+   top-of-region tile. Dungeons are not travel targets — enter them on foot. */
+const WARP={town:[20,17],forest:[30,2],mountains:[30,2],plains:[30,2],desert:[30,2]};
+function underAttack(){return world[P.map].mobs.some(m=>m.alive&&m.aggro);}
+function warpTo(dest){
+  if(!world[dest]||!WARP[dest])return;
+  if(dest===P.map){toast('You are already here.');return;}
+  if(underAttack()){toast('Cannot travel while under attack!','bad');return;}
+  const[x,y]=WARP[dest];
+  P.map=dest;P.tx=x;P.ty=y;P.px=x*TILE;P.py=y*TILE;
+  P.path=[];P.moving=null;P.action=null;
+  world[dest].mobs.forEach(m=>m.aggro=false);
+  if(REGION_ORDER.includes(dest)){if(!P.reached)P.reached={};P.reached[dest]=true;}
+  const zl=$('zone');zl.textContent=MAPS[dest].name;zl.classList.remove('go');void zl.offsetWidth;zl.classList.add('go');
+  sfx('level');save();
 }
 
 /* ---------------- current combat mode from weapon ---------------- */
@@ -50,8 +70,9 @@ function trainSkill(){
 /* combat triangle: melee > ranged > magic > melee */
 function triangle(att,def){
   if(att===def)return 1;
-  if((att==='melee'&&def==='ranged')||(att==='ranged'&&def==='magic')||(att==='magic'&&def==='melee'))return 1.25;
-  return 0.8;
+  /* softened so fighting off-style is a mild penalty, not a death sentence */
+  if((att==='melee'&&def==='ranged')||(att==='ranged'&&def==='magic')||(att==='magic'&&def==='melee'))return 1.18;
+  return 0.88;
 }
 /* player attack + max hit from skills, gear, style, capes */
 function playerAttack(){
@@ -61,7 +82,7 @@ function playerAttack(){
   const w=P.gear.weapon&&GEAR[P.gear.weapon.id];
   const ws=w?gearStats(P.gear.weapon):{acc:2,pow:1};
   let acc = accSkill*2 + (ws.acc||0)*1.5 + 8;
-  let pow = 1 + powSkill*0.35 + (ws.pow||0)*0.5
+  let pow = 2 + powSkill*0.38 + (ws.pow||0)*0.5
           + (m==='ranged'?b.rpow:m==='magic'?b.mpow:0)*0.5;
   if(m==='melee'&&P.style==='accurate')acc*=1.12;
   if(m==='melee'&&P.style==='aggressive')pow*=1.1;
@@ -186,13 +207,15 @@ function rollLoot(mob){
   const d=MOBS[mob.type];
   const out={gold:0,items:[]};
   const rolls=(d.boss||d.semi)?2:1; /* bosses + dungeon semi-bosses roll twice */
+  /* fodder drops the biome's gear line; bosses/semis stay any-line jackpots */
+  const biomeLine=(d.boss||d.semi)?null:BIOME_LINE[P.map];
   for(let i=0;i<rolls;i++){
     const e=lootRoll(d.loot);
     if(e.gold)out.gold+=rand(e.gold[0],e.gold[1]);
     else if(e.item)out.items.push({id:e.item,qty:rand(e.q[0],e.q[1])});
     else if(e.gear){
       const tier=rand(e.gear.tierMin,e.gear.tierMax);
-      const lines=e.gear.line?[e.gear.line]:['m','r','g'];
+      const lines=e.gear.line?[e.gear.line]:(biomeLine?[biomeLine]:['m','r','g']);
       const line=lines[rand(0,lines.length-1)];
       const slots=Object.keys(LINE_DEFS[line].slots);
       const slot=slots[rand(0,slots.length-1)];
@@ -285,9 +308,9 @@ function doAction(){
       P.atkT=T;
       const md=MOBS[t.type];
       const tri=triangle(mode,md.style);
-      const chance=hitChance(atk.acc*(tri>1?1.1:tri<1?0.9:1), md.def*2+8);
+      const chance=hitChance(atk.acc*(tri>1?1.07:tri<1?0.93:1), md.def*2+8);
       let dmg=0;
-      if(Math.random()<chance)dmg=Math.max(1,Math.round(rand(1,atk.maxHit)*tri));
+      if(Math.random()<chance)dmg=Math.max(1,Math.round(rand(Math.ceil(atk.maxHit*0.35),atk.maxHit)*tri));
       if(mode==='ranged'){shoot(P.px+16,P.py+8,t.px+16,t.py+8,'#d8d5c8');sfx('shoot');}
       else if(mode==='magic'){shoot(P.px+16,P.py+8,t.px+16,t.py+8,'#b06fd1');sfx('zap');}
       else sfx('hit');
@@ -365,9 +388,9 @@ function updateMobs(){
         if(T>=m.atkT){
           m.atkT=T+d.spd;
           const tri=triangle(d.style,combatMode());
-          const chance=hitChance(d.acc*2+8,playerDefence()*(tri>1?0.92:1));
+          const chance=hitChance(d.acc*2+8,playerDefence()*(tri>1?0.95:1));
           let dmg=0;
-          if(Math.random()<chance)dmg=Math.max(1,Math.round(rand(1,Math.max(1,Math.floor(1+d.pow*0.45)))*tri));
+          if(Math.random()<chance)dmg=Math.max(1,Math.round(rand(1,Math.max(1,Math.floor(1+d.pow*0.40)))*tri));
           if(d.style==='ranged')shoot(m.px+16,m.py+8,P.px+16,P.py+8,'#d8d5c8');
           if(d.style==='magic')shoot(m.px+16,m.py+8,P.px+16,P.py+8,'#b06fd1');
           m.lungeT=T; /* renderer lunges the mob toward the player briefly */

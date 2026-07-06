@@ -87,7 +87,8 @@ const GEAR={};
         }else{
           const defBase = slot==='body'?2+2*t : slot==='legs'?1+Math.round(1.5*t)
                         : slot==='shield'?2+2*t : 1+t;
-          const hpBase  = slot==='body'?2+t : slot==='shield'?1+t : 1+Math.ceil(t/2);
+          const hpBase  = slot==='body'?4+2*t : slot==='legs'?2+t
+                        : slot==='shield'?2+t : 1+t; /* helmet */
           const lineDef = L==='m'?1 : 0.75;
           g.stats.def=Math.max(1,Math.round(defBase*lineDef));
           g.stats.hp=hpBase;
@@ -140,6 +141,11 @@ const ITEMS={
   ancient_dust:{name:'Ancient Dust',price:0,sell:18,stack:true},
   swamp_herb:{name:'Swamp Herb',price:0,sell:14,stack:true},
   gem:{name:'Gemstone',price:0,sell:60,stack:true},
+  /* biome signature drops (sell for gold; region identity) */
+  spider_silk:{name:'Spider Silk',price:0,sell:16,stack:true},
+  thick_fur:{name:'Thick Fur',price:0,sell:28,stack:true},
+  lion_fang:{name:'Lion Fang',price:0,sell:46,stack:true},
+  scarab_shell:{name:'Scarab Shell',price:0,sell:72,stack:true},
   arrows:{name:'Arrows',price:2,sell:1,stack:true,ammo:true},
   runes:{name:'Runes',price:3,sell:1,stack:true,ammo:true},
   bread:{name:'Bread',price:8,sell:2,stack:true,heal:6},
@@ -194,15 +200,15 @@ function lootRoll(table){
    roll + rarity boost, faster respawn). Both live inside dungeons. */
 const MOBS={
   /* ===== Dense Forest — Whisperwood (lvl 3–12) ===== */
-  spider:{name:'Forest Spider',lvl:4,hp:14,style:'melee',acc:7,pow:4,def:3,spd:2400,range:1,
+  spider:{name:'Forest Spider',lvl:4,hp:12,style:'melee',acc:7,pow:4,def:3,spd:2400,range:1,
     aggro:false,xp:24,gold:[2,7],
     loot:[{w:48,gold:[2,7]},{w:20,item:'bone',q:[1,1]},{w:12,item:'bread',q:[1,1]},
-          {w:10,gear:{tierMin:1,tierMax:2}},{w:10,item:'cooked_meat',q:[1,1]}]},
-  boar:{name:'Wild Boar',lvl:6,hp:22,style:'melee',acc:9,pow:6,def:5,spd:2200,range:1,
+          {w:10,gear:{tierMin:1,tierMax:2}},{w:10,item:'cooked_meat',q:[1,1]},{w:12,item:'spider_silk',q:[1,2]}]},
+  boar:{name:'Wild Boar',lvl:6,hp:16,style:'melee',acc:8,pow:5,def:4,spd:2400,range:1,
     aggro:true,xp:34,gold:[0,4],
     loot:[{w:44,item:'wolf_pelt',q:[1,1]},{w:24,item:'cooked_meat',q:[1,2]},
           {w:20,item:'bone',q:[1,2]},{w:12,gear:{tierMin:1,tierMax:2}}]},
-  bandit:{name:'Forest Bandit',lvl:9,hp:28,style:'ranged',acc:12,pow:7,def:6,spd:2800,range:4,
+  bandit:{name:'Forest Bandit',lvl:9,hp:22,style:'ranged',acc:11,pow:6,def:5,spd:2800,range:4,
     aggro:true,xp:46,gold:[6,16],
     loot:[{w:34,gold:[6,16]},{w:22,item:'arrows',q:[6,14]},{w:16,item:'bread',q:[1,2]},
           {w:16,gear:{tierMin:1,tierMax:2}},{w:12,item:'copper_ore',q:[1,1]}]},
@@ -211,12 +217,12 @@ const MOBS={
   frost_wolf:{name:'Frost Wolf',lvl:15,hp:40,style:'melee',acc:16,pow:11,def:10,spd:2100,range:1,
     aggro:true,xp:72,gold:[4,12],
     loot:[{w:40,item:'wolf_pelt',q:[1,2]},{w:24,item:'cooked_meat',q:[1,2]},
-          {w:18,item:'bone',q:[1,3]},{w:18,gear:{tierMin:2,tierMax:3}}]},
+          {w:18,item:'bone',q:[1,3]},{w:18,gear:{tierMin:2,tierMax:3}},{w:16,item:'thick_fur',q:[1,2]}]},
   ice_sprite:{name:'Ice Sprite',lvl:18,hp:36,style:'magic',acc:19,pow:13,def:10,spd:2800,range:4,
     aggro:true,xp:92,gold:[8,20],
     loot:[{w:30,gold:[8,20]},{w:24,item:'runes',q:[6,16]},{w:18,item:'gem',q:[1,1]},
           {w:18,gear:{tierMin:2,tierMax:4}},{w:10,item:'meat_pie',q:[1,1]}]},
-  snow_troll:{name:'Snow Troll',lvl:22,hp:68,style:'melee',acc:22,pow:15,def:18,spd:2800,range:1,
+  snow_troll:{name:'Snow Troll',lvl:20,hp:56,style:'melee',acc:20,pow:13,def:15,spd:2800,range:1,
     aggro:true,xp:130,gold:[10,26],
     loot:[{w:30,gold:[10,26]},{w:22,item:'iron_ore',q:[1,2]},{w:20,gear:{tierMin:3,tierMax:4}},
           {w:16,item:'bone',q:[2,4]},{w:12,item:'gem',q:[1,1]}]},
@@ -225,7 +231,7 @@ const MOBS={
   steppe_lion:{name:'Steppe Lion',lvl:26,hp:74,style:'melee',acc:25,pow:16,def:16,spd:2200,range:1,
     aggro:true,xp:150,gold:[12,30],
     loot:[{w:34,item:'wolf_pelt',q:[1,3]},{w:24,item:'cooked_meat',q:[2,3]},
-          {w:20,gear:{tierMin:3,tierMax:4}},{w:12,item:'gem',q:[1,1]},{w:10,item:'meat_pie',q:[1,1]}]},
+          {w:20,gear:{tierMin:3,tierMax:4}},{w:12,item:'gem',q:[1,1]},{w:10,item:'meat_pie',q:[1,1]},{w:14,item:'lion_fang',q:[1,2]}]},
   war_hawk:{name:'War Hawk',lvl:30,hp:58,style:'ranged',acc:28,pow:18,def:15,spd:2600,range:4,
     aggro:true,xp:176,gold:[14,34],
     loot:[{w:30,gold:[14,34]},{w:26,item:'arrows',q:[12,28]},{w:20,gear:{tierMin:3,tierMax:5}},
@@ -236,15 +242,15 @@ const MOBS={
           {w:16,item:'ancient_dust',q:[1,2]},{w:12,item:'gem',q:[1,2]}]},
 
   /* ===== Ashen Desert — dunes (lvl 38–49) ===== */
-  scorpion:{name:'Sand Scorpion',lvl:38,hp:92,style:'melee',acc:36,pow:23,def:24,spd:2400,range:1,
+  scorpion:{name:'Sand Scorpion',lvl:38,hp:80,style:'melee',acc:34,pow:20,def:20,spd:2400,range:1,
     aggro:true,xp:212,gold:[16,40],
     loot:[{w:30,gold:[16,40]},{w:24,item:'gem',q:[1,2]},{w:20,gear:{tierMin:4,tierMax:5}},
-          {w:14,item:'bone',q:[2,4]},{w:12,item:'stew',q:[1,1]}]},
+          {w:14,item:'bone',q:[2,4]},{w:12,item:'stew',q:[1,1]},{w:16,item:'scarab_shell',q:[1,2]}]},
   sand_wraith:{name:'Sand Wraith',lvl:42,hp:86,style:'magic',acc:40,pow:26,def:24,spd:2800,range:4,
     aggro:true,xp:250,gold:[20,50],
     loot:[{w:28,gold:[20,50]},{w:24,item:'runes',q:[14,30]},{w:20,item:'ancient_dust',q:[1,3]},
           {w:18,gear:{tierMin:4,tierMax:6}},{w:10,item:'gem',q:[1,2]}]},
-  dune_raider:{name:'Dune Raider',lvl:45,hp:98,style:'ranged',acc:44,pow:28,def:26,spd:2600,range:4,
+  dune_raider:{name:'Dune Raider',lvl:44,hp:86,style:'ranged',acc:42,pow:25,def:23,spd:2600,range:4,
     aggro:true,xp:280,gold:[24,56],
     loot:[{w:28,gold:[24,56]},{w:24,item:'arrows',q:[18,40]},{w:20,gear:{tierMin:5,tierMax:6}},
           {w:16,item:'gem',q:[1,2]},{w:12,item:'stew',q:[1,2]}]},
@@ -268,23 +274,32 @@ const MOBS={
           {w:14,item:'ancient_dust',q:[3,5]}]},
 
   /* ===== Dungeon bosses (big 2× sprite, ~5-min respawn, best loot) ===== */
-  bandit_king:{name:'The Bandit King',lvl:16,hp:120,style:'melee',acc:18,pow:12,def:12,spd:2400,range:1,
+  bandit_king:{name:'The Bandit King',lvl:16,hp:100,style:'melee',acc:18,pow:12,def:12,spd:2400,range:1,
     aggro:true,xp:360,gold:[50,110],boss:true,respawn:300000,rarityBoost:2,
     loot:[{w:42,gear:{tierMin:2,tierMax:3}},{w:28,gold:[50,110]},{w:18,item:'meat_pie',q:[1,2]},
-          {w:12,item:'gem',q:[1,1]}]},
-  frost_giant:{name:'The Frost Giant',lvl:32,hp:260,style:'melee',acc:26,pow:18,def:24,spd:2800,range:1,
+          {w:12,item:'gem',q:[1,1]},{w:16,item:'spider_silk',q:[2,4]}]},
+  frost_giant:{name:'The Frost Giant',lvl:32,hp:190,style:'melee',acc:26,pow:16,def:24,spd:2800,range:1,
     aggro:true,xp:640,gold:[90,200],boss:true,respawn:300000,rarityBoost:2,
     loot:[{w:42,gear:{tierMin:3,tierMax:5}},{w:26,gold:[90,200]},{w:18,item:'gem',q:[1,2]},
-          {w:14,item:'iron_ore',q:[2,4]}]},
-  plains_warlord:{name:'The Plains Warlord',lvl:42,hp:300,style:'melee',acc:40,pow:26,def:30,spd:2400,range:1,
+          {w:14,item:'iron_ore',q:[2,4]},{w:18,item:'thick_fur',q:[2,4]}]},
+  plains_warlord:{name:'The Plains Warlord',lvl:42,hp:220,style:'melee',acc:40,pow:24,def:30,spd:2400,range:1,
     aggro:true,xp:900,gold:[140,300],boss:true,respawn:300000,rarityBoost:3,
     loot:[{w:44,gear:{tierMin:4,tierMax:6}},{w:24,gold:[140,300]},{w:18,item:'gem',q:[2,3]},
-          {w:14,item:'ancient_dust',q:[2,4]}]},
-  sand_pharaoh:{name:'The Sand Pharaoh',lvl:50,hp:360,style:'magic',acc:50,pow:34,def:36,spd:2600,range:5,
+          {w:14,item:'ancient_dust',q:[2,4]},{w:18,item:'lion_fang',q:[2,4]}]},
+  sand_pharaoh:{name:'The Sand Pharaoh',lvl:50,hp:260,style:'magic',acc:48,pow:30,def:36,spd:2600,range:5,
     aggro:true,xp:1600,gold:[240,480],boss:true,respawn:300000,rarityBoost:3,
     loot:[{w:46,gear:{tierMin:5,tierMax:6}},{w:22,gold:[240,480]},{w:18,item:'gem',q:[2,4]},
-          {w:14,item:'ancient_dust',q:[4,7]}]},
+          {w:14,item:'ancient_dust',q:[4,7]},{w:20,item:'scarab_shell',q:[2,4]}]},
 };
+
+/* region order (overworld chain) + per-biome overworld gear-line bias.
+   Fodder in a region drops that line so each biome has a gear identity and the
+   player naturally collects all three lines across the journey (melee → ranged
+   → magic → ranged); dungeon bosses/semis ignore this and drop any line. */
+const REGION_ORDER=['forest','mountains','plains','desert'];
+const BIOME_LINE={forest:'m',forest_dungeon:'m',mountains:'r',mountains_dungeon:'r',
+  plains:'g',plains_dungeon:'g',desert:'r',desert_dungeon:'r'};
+const BIOME_MAT={forest:'spider_silk',mountains:'thick_fur',plains:'lion_fang',desert:'scarab_shell'};
 
 /* ---------------- NPCs & dialogue ---------------- */
 const NPCS={
@@ -367,7 +382,7 @@ const MAPS={
  plains_dungeon:{name:'Sunken Barrow',ground:',',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
  desert_dungeon:{name:"Pharaoh's Tomb",ground:',',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
 };
-const BLOCKED=new Set(['X','R','W','F','#','Q','U','S','~','H','B','K','k']);
+const BLOCKED=new Set(['X','R','W','F','#','Q','U','S','~','H','B','K','k','V','N']);
 
 /* ---- generate the St. Vith town grid: egg-shaped stone wall + one south gate
    Interior is walkable grass/road; the egg ring is now a solid WALL 'K'
@@ -431,13 +446,13 @@ const BLOCKED=new Set(['X','R','W','F','#','Q','U','S','~','H','B','K','k']);
    {id:'forest',ground:'.',edge:'F',north:'town',south:'mountains',dungeon:'forest_dungeon',
     res:[['T',34],['O',12],['C',8]],decor:[['X',6]],water:2,
     mobs:{spider:9,boar:6,bandit:5}},
-   {id:'mountains',ground:'s',edge:'X',north:'forest',south:'plains',dungeon:'mountains_dungeon',
+   {id:'mountains',ground:'s',edge:'V',north:'forest',south:'plains',dungeon:'mountains_dungeon',
     res:[['Y',20],['I',10],['Z',6]],decor:[['X',34]],water:0,
     mobs:{frost_wolf:8,ice_sprite:6,snow_troll:5}},
    {id:'plains',ground:'a',edge:'X',north:'mountains',south:'desert',dungeon:'plains_dungeon',
     res:[['T',14],['I',8]],decor:[['X',10]],water:3,
     mobs:{steppe_lion:8,war_hawk:6,nomad:5}},
-   {id:'desert',ground:'d',edge:'X',north:'plains',south:null,dungeon:'desert_dungeon',
+   {id:'desert',ground:'d',edge:'N',north:'plains',south:null,dungeon:'desert_dungeon',
     res:[['Z',9]],decor:[['k',18],['X',12]],water:2,
     mobs:{scorpion:8,sand_wraith:6,dune_raider:5}},
   ];
@@ -575,7 +590,7 @@ function findPath(map,sx,sy,dx,dy,adjacentOk){
 function freshPlayer(){return{
   v:SAVE_VERSION,
   map:'town',tx:20,ty:17,px:20*TILE,py:17*TILE,facing:1,
-  hp:10,
+  hp:14,
   xp:{attack:0,strength:0,defence:0,ranged:0,magic:0,woodcutting:0,mining:0},
   style:'accurate', // melee training style: accurate|aggressive|defensive
   gold:0,
@@ -589,6 +604,7 @@ function freshPlayer(){return{
   quests:{},questProg:{},
   daily:{date:'',tasks:[],prog:{},claimed:[]},
   login:{last:'',streak:0},
+  reached:{},        // region ids the player has set foot in (unlocks fast travel)
   grave:null,        // {map,x,y,items:[...],gold,left}  left = ms remaining
   stats:{kills:0,deaths:0,chopped:0,mined:0,bossKills:{},legendaries:0,
          playMs:0,bestDrop:null,questsDone:0},
@@ -599,7 +615,7 @@ let P=freshPlayer();
 const lvl=s=>lvlFor(P.xp[s]);
 function totalLevel(){return SKILL_ORDER.reduce((a,s)=>a+lvl(s),0);}
 function maxHp(){
-  let hp=10;
+  let hp=14; /* flat base; the rest comes from gear */
   for(const slot in P.gear){const pc=P.gear[slot];
     if(pc&&GEAR[pc.id]){const st=gearStats(pc);hp+=st.hp||0;}}
   return hp;
@@ -626,7 +642,9 @@ function serialize(){
   for(const m in world)clean.worldDrops[m]=world[m].drops;
   return clean;
 }
+let _resetting=false; /* set by resetSave so autosave/unload can't re-write the wiped save */
 function save(){
+  if(_resetting)return;
   P.ts=Date.now();
   try{store.set(SAVE_KEY,JSON.stringify(serialize()));}catch(e){}
   syncPushSoon();
@@ -680,7 +698,18 @@ function migrateV1(o){
   d.ownedTools=[...new Set(d.ownedTools)];
   return d;
 }
-function resetSave(){store.del(SAVE_KEY);store.del(OLD_KEY);location.reload();}
+/* full reset: wipe the local save, the cloud copy (if syncing), and the cached
+   app code + service worker, then reload into a brand-new game. */
+async function resetSave(){
+  _resetting=true; /* block any further autosave/unload writes from this session */
+  store.del(SAVE_KEY);store.del(OLD_KEY);
+  try{ if(typeof syncEnabled==='function'&&syncEnabled())
+    await fetch('/api/save',{method:'POST',headers:syncHeaders(),
+      body:JSON.stringify({save:{...freshPlayer(),ts:Date.now()}})}); }catch(e){}
+  try{ if(window.caches){const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));} }catch(e){}
+  try{ if('serviceWorker'in navigator){const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.unregister()));} }catch(e){}
+  location.reload();
+}
 
 /* ---------------- inventory ---------------- */
 function invGet(id){return P.inv.find(s=>s.id===id&&!s.gear);}
@@ -1068,10 +1097,31 @@ function buildSprites(){
     p(5,6,6,8,'#6a716c');p(6,4,4,3,'#6a716c');p(6,5,4,1,'#757c76');
     p(7,8,2,1,'#525a54');p(6,10,4,1,'#525a54');});
   SPR['E']=mk(32,32,(g,p)=>{g.drawImage(SPR['P'],0,0);p(6,7,5,2,'#e8b64c');p(10,5,2,2,'#e8b64c');p(10,9,2,2,'#e8b64c');});
-  /* ---- biome grounds (snow / savanna / desert sand) ---- */
-  SPR['s']=noiseTile('#e2e9f1',['#d1dbe6','#f2f6fa','#c6d0dc'],9);
-  SPR['a']=noiseTile('#a89a4e',['#8f833c','#b8ab5e','#9c8f45'],14);
-  SPR['d']=noiseTile('#d8c489',['#cbb677','#e6d6a0','#c9b06f'],8);
+  /* ---- biome grounds (snow / savanna / desert sand) — characterful ---- */
+  SPR['s']=mkPix(32,32,(g,q)=>{
+    g.fillStyle='#e6edf4';g.fillRect(0,0,32,32);
+    [[3,5,8,4],[19,4,9,4],[22,20,7,5],[4,23,7,4],[13,13,7,3]].forEach(([x,y,w,h])=>q(x,y,w,h,'#dbe4ee'));
+    [[7,10],[24,9],[10,26],[27,24]].forEach(([x,y])=>q(x,y,3,1,'#cdd8e6'));
+    q(12,7,1,1,'#ffffff');q(21,15,1,1,'#ffffff');q(6,20,1,1,'#ffffff');q(28,12,1,1,'#bfe0ff');});
+  SPR['a']=mkPix(32,32,(g,q)=>{
+    g.fillStyle='#a89a4e';g.fillRect(0,0,32,32);
+    [[3,4,7,3],[18,6,9,4],[24,22,6,4],[4,24,7,3],[13,14,7,3]].forEach(([x,y,w,h])=>q(x,y,w,h,'#9c8f45'));
+    [[6,9],[16,5],[25,12],[9,20],[20,25],[28,18],[12,28]].forEach(([x,y])=>{
+      q(x,y-2,1,3,'#8f833c');q(x-1,y-1,1,2,'#8f833c');q(x+1,y-1,1,2,'#8f833c');});
+    q(7,7,1,1,'#c8b95e');q(22,16,1,1,'#c8b95e');});
+  SPR['d']=mkPix(32,32,(g,q)=>{
+    g.fillStyle='#d8c489';g.fillRect(0,0,32,32);
+    for(const y of [5,13,21,29])for(let x=0;x<32;x++){const o=Math.round(Math.sin((x+y)/4)*1.5);
+      q(x,y+o,1,1,'#c9b06f');q(x,y+o-1,1,1,'#e6d6a0');}
+    q(6,3,1,1,'#efe0b0');q(22,9,1,1,'#c9b06f');q(27,24,1,1,'#efe0b0');});
+  /* ---- biome border cliffs (blocking): snow-capped peak, sandstone ---- */
+  SPR['V']=mk(32,32,(g,p)=>{g.fillStyle='#6b7079';g.fillRect(0,0,32,32);
+    for(let r=0;r<4;r++)for(let c2=0;c2<4;c2++){const off=r%2?2:0;
+      p((c2*4+off)%16,r*4,3,3,'#767b84');p((c2*4+off)%16,r*4,3,1,'#828892');}
+    p(0,0,16,2,'#eaf1f8');p(0,2,16,1,'#cdd8e6');p(2,3,3,1,'#f2f7fb');p(9,3,4,1,'#f2f7fb');});
+  SPR['N']=mk(32,32,(g,p)=>{g.fillStyle='#c2a266';g.fillRect(0,0,32,32);
+    for(let r=0;r<8;r++)p(0,r*2,16,1,r%2?'#b08f57':'#cdae72');
+    p(0,0,16,1,'#d8bd85');p(4,2,1,5,'#9c7d4a');p(11,7,1,6,'#9c7d4a');p(7,10,1,4,'#9c7d4a');});
   /* ---- town wall (dressed stone), cactus, dungeon mouth ---- */
   SPR['K']=mk(32,32,(g,p)=>{g.fillStyle='#5b5f66';g.fillRect(0,0,32,32);
     for(let r=0;r<4;r++)for(let c2=0;c2<4;c2++){const off=r%2?2:0;
@@ -1443,6 +1493,7 @@ const ITEM_ICON={
   logs:['logs','#8a6a42'],oak_logs:['logs','#5b4632'],copper_ore:['ore','#c47f3e'],
   iron_ore:['ore','#9fb0bd'],bone:['bone','#d8d5c8'],wolf_pelt:['pelt','#8b8b8b'],
   ancient_dust:['dust','#b0a0e0'],swamp_herb:['herb','#7af0c9'],gem:['gem','#66e0ff'],
+  spider_silk:['pelt','#d8d5e8'],thick_fur:['pelt','#b9c6d4'],lion_fang:['bone','#e6c48e'],scarab_shell:['gem','#6a8a4e'],
   arrows:['arrow','#b8c4cf'],runes:['rune','#9b7fd1'],
   bread:['bread','#d9a860'],cooked_meat:['meat','#a05a3a'],meat_pie:['pie','#c98b50'],
   stew:['stew','#8a5a3a'],
@@ -1483,9 +1534,29 @@ function switchMap(ex){
   P.map=ex.map;P.tx=ex.tx;P.ty=ex.ty;P.px=P.tx*TILE;P.py=P.ty*TILE;
   P.path=[];P.moving=null;P.action=null;
   world[P.map].mobs.forEach(m=>m.aggro=false);
+  if(REGION_ORDER.includes(P.map)){if(!P.reached)P.reached={};P.reached[P.map]=true;}
   const zl=$('zone');zl.textContent=MAPS[P.map].name;
   zl.classList.remove('go');void zl.offsetWidth;zl.classList.add('go');
   save();
+}
+
+/* ---------------- fast travel ----------------
+   Home to town + any region already reached on foot; blocked while a mob is
+   actively attacking you (can't teleport out of a fight). Arrives at the safe
+   top-of-region tile. Dungeons are not travel targets — enter them on foot. */
+const WARP={town:[20,17],forest:[30,2],mountains:[30,2],plains:[30,2],desert:[30,2]};
+function underAttack(){return world[P.map].mobs.some(m=>m.alive&&m.aggro);}
+function warpTo(dest){
+  if(!world[dest]||!WARP[dest])return;
+  if(dest===P.map){toast('You are already here.');return;}
+  if(underAttack()){toast('Cannot travel while under attack!','bad');return;}
+  const[x,y]=WARP[dest];
+  P.map=dest;P.tx=x;P.ty=y;P.px=x*TILE;P.py=y*TILE;
+  P.path=[];P.moving=null;P.action=null;
+  world[dest].mobs.forEach(m=>m.aggro=false);
+  if(REGION_ORDER.includes(dest)){if(!P.reached)P.reached={};P.reached[dest]=true;}
+  const zl=$('zone');zl.textContent=MAPS[dest].name;zl.classList.remove('go');void zl.offsetWidth;zl.classList.add('go');
+  sfx('level');save();
 }
 
 /* ---------------- current combat mode from weapon ---------------- */
@@ -1512,8 +1583,9 @@ function trainSkill(){
 /* combat triangle: melee > ranged > magic > melee */
 function triangle(att,def){
   if(att===def)return 1;
-  if((att==='melee'&&def==='ranged')||(att==='ranged'&&def==='magic')||(att==='magic'&&def==='melee'))return 1.25;
-  return 0.8;
+  /* softened so fighting off-style is a mild penalty, not a death sentence */
+  if((att==='melee'&&def==='ranged')||(att==='ranged'&&def==='magic')||(att==='magic'&&def==='melee'))return 1.18;
+  return 0.88;
 }
 /* player attack + max hit from skills, gear, style, capes */
 function playerAttack(){
@@ -1523,7 +1595,7 @@ function playerAttack(){
   const w=P.gear.weapon&&GEAR[P.gear.weapon.id];
   const ws=w?gearStats(P.gear.weapon):{acc:2,pow:1};
   let acc = accSkill*2 + (ws.acc||0)*1.5 + 8;
-  let pow = 1 + powSkill*0.35 + (ws.pow||0)*0.5
+  let pow = 2 + powSkill*0.38 + (ws.pow||0)*0.5
           + (m==='ranged'?b.rpow:m==='magic'?b.mpow:0)*0.5;
   if(m==='melee'&&P.style==='accurate')acc*=1.12;
   if(m==='melee'&&P.style==='aggressive')pow*=1.1;
@@ -1648,13 +1720,15 @@ function rollLoot(mob){
   const d=MOBS[mob.type];
   const out={gold:0,items:[]};
   const rolls=(d.boss||d.semi)?2:1; /* bosses + dungeon semi-bosses roll twice */
+  /* fodder drops the biome's gear line; bosses/semis stay any-line jackpots */
+  const biomeLine=(d.boss||d.semi)?null:BIOME_LINE[P.map];
   for(let i=0;i<rolls;i++){
     const e=lootRoll(d.loot);
     if(e.gold)out.gold+=rand(e.gold[0],e.gold[1]);
     else if(e.item)out.items.push({id:e.item,qty:rand(e.q[0],e.q[1])});
     else if(e.gear){
       const tier=rand(e.gear.tierMin,e.gear.tierMax);
-      const lines=e.gear.line?[e.gear.line]:['m','r','g'];
+      const lines=e.gear.line?[e.gear.line]:(biomeLine?[biomeLine]:['m','r','g']);
       const line=lines[rand(0,lines.length-1)];
       const slots=Object.keys(LINE_DEFS[line].slots);
       const slot=slots[rand(0,slots.length-1)];
@@ -1747,9 +1821,9 @@ function doAction(){
       P.atkT=T;
       const md=MOBS[t.type];
       const tri=triangle(mode,md.style);
-      const chance=hitChance(atk.acc*(tri>1?1.1:tri<1?0.9:1), md.def*2+8);
+      const chance=hitChance(atk.acc*(tri>1?1.07:tri<1?0.93:1), md.def*2+8);
       let dmg=0;
-      if(Math.random()<chance)dmg=Math.max(1,Math.round(rand(1,atk.maxHit)*tri));
+      if(Math.random()<chance)dmg=Math.max(1,Math.round(rand(Math.ceil(atk.maxHit*0.35),atk.maxHit)*tri));
       if(mode==='ranged'){shoot(P.px+16,P.py+8,t.px+16,t.py+8,'#d8d5c8');sfx('shoot');}
       else if(mode==='magic'){shoot(P.px+16,P.py+8,t.px+16,t.py+8,'#b06fd1');sfx('zap');}
       else sfx('hit');
@@ -1827,9 +1901,9 @@ function updateMobs(){
         if(T>=m.atkT){
           m.atkT=T+d.spd;
           const tri=triangle(d.style,combatMode());
-          const chance=hitChance(d.acc*2+8,playerDefence()*(tri>1?0.92:1));
+          const chance=hitChance(d.acc*2+8,playerDefence()*(tri>1?0.95:1));
           let dmg=0;
-          if(Math.random()<chance)dmg=Math.max(1,Math.round(rand(1,Math.max(1,Math.floor(1+d.pow*0.45)))*tri));
+          if(Math.random()<chance)dmg=Math.max(1,Math.round(rand(1,Math.max(1,Math.floor(1+d.pow*0.40)))*tri));
           if(d.style==='ranged')shoot(m.px+16,m.py+8,P.px+16,P.py+8,'#d8d5c8');
           if(d.style==='magic')shoot(m.px+16,m.py+8,P.px+16,P.py+8,'#b06fd1');
           m.lungeT=T; /* renderer lunges the mob toward the player briefly */
@@ -2166,7 +2240,8 @@ function drawMinimap(){
     const ch=W.grid[y][x];
     g.fillStyle = ch==='~'?'#31504f' : (ch==='P'||ch==='E'||ch==='D')?'#8a8578'
       : ch==='B'||ch==='K'?'#6f5340' : (ch==='Q'||ch==='H'||ch==='G')?'#c9a24a'
-      : ch==='k'?'#3f7a3a' : MM_GROUND[ch]||(RES[ch]?gnd:'#33302a');
+      : ch==='k'?'#3f7a3a' : ch==='V'?'#8a929c' : ch==='N'?'#b08f57'
+      : MM_GROUND[ch]||(RES[ch]?gnd:'#33302a');
     g.fillRect(x*cell,y*cell,cell,cell);
   }
   for(const r of W.res){if(!r.alive)continue;
@@ -2429,6 +2504,23 @@ function openCapes(){
   openPanel("Master Aldric's Capes",h);
 }
 
+/* ---------------- fast travel ---------------- */
+function openTravel(){
+  const busy=underAttack();
+  let h='<div class="sect">Fast travel</div>';
+  const dests=[['town','Emberbrook (Town)']];
+  for(const r of REGION_ORDER)if(P.reached&&P.reached[r])dests.push([r,MAPS[r].name]);
+  for(const[id,name]of dests){
+    const here=id===P.map;
+    h+='<div class="qrow"><span>'+esc(name)+(here?' <span class="hint">— here</span>':'')+'</span>'+
+      (here?'<span class="tag">•</span>'
+        :busy?'<span class="tag locked">under attack</span>'
+        :'<button class="btn small" data-act="warp" data-arg="'+id+'">Travel</button>')+'</div>';
+  }
+  h+='<div class="hint">Reach a region on foot once to unlock travel to it. Dungeons are entered from inside their region.</div>';
+  openPanel('Travel',h);
+}
+
 /* ---------------- settings + cloud sync ---------------- */
 function syncStatusText(){
   return SYNC.state==='ok'?'✓ synced '+new Date(SYNC.lastOk).toLocaleTimeString()
@@ -2594,7 +2686,8 @@ $('pbody').addEventListener('click',ev=>{
       toast('Save imported!','good');closePanel();
     }catch(e){toast('Invalid save code.','bad');}
   }
-  else if(act==='reset'){if(confirm('Delete this character and start over?'))resetSave();}
+  else if(act==='reset'){if(confirm('Reset Emberbrook?\n\nThis deletes your saved character and starts a brand-new game in the current world. This cannot be undone.'))resetSave();}
+  else if(act==='warp'){warpTo(arg);if(P.map===arg)closePanel();else openTravel();}
 });
 $('bInv').addEventListener('click',()=>{ensureAudio();openInventory();});
 $('bEquip').addEventListener('click',()=>{ensureAudio();openEquipment();});
@@ -2603,6 +2696,7 @@ $('bQuests').addEventListener('click',()=>{ensureAudio();openQuests();});
 $('bMap').addEventListener('click',()=>{ensureAudio();toggleMinimap();});
 $('minimap').addEventListener('click',()=>{minimapOn=false;$('minimap').classList.remove('open');});
 $('bGear').addEventListener('click',()=>{ensureAudio();openSettings();});
+{const bt=$('bTravel');if(bt)bt.addEventListener('click',()=>{ensureAudio();openTravel();});}
 const sb=$('stylebtn');
 if(sb)sb.addEventListener('click',()=>{
   const order=['accurate','aggressive','defensive'];
@@ -2712,7 +2806,9 @@ function boot(){
   $('zone').textContent=MAPS[P.map].name;$('zone').classList.add('go');
   updateHUD();
   if(!hadSave){
-    P.gear.weapon={id:'g_m_1_weapon',r:0};addItem('bread',5);rebuildPlayerSprite();
+    P.gear.weapon={id:'g_m_1_weapon',r:0};
+    P.gear.body={id:'g_m_1_body',r:0};P.gear.legs={id:'g_m_1_legs',r:0};
+    P.hp=maxHp();addItem('bread',5);rebuildPlayerSprite();
     setTimeout(()=>toast('Welcome to Emberbrook! Talk to Elder Rowan to begin.','gold'),400);
   }
   syncNow(false);

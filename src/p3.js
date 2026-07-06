@@ -5,7 +5,7 @@
 function freshPlayer(){return{
   v:SAVE_VERSION,
   map:'town',tx:20,ty:17,px:20*TILE,py:17*TILE,facing:1,
-  hp:10,
+  hp:14,
   xp:{attack:0,strength:0,defence:0,ranged:0,magic:0,woodcutting:0,mining:0},
   style:'accurate', // melee training style: accurate|aggressive|defensive
   gold:0,
@@ -19,6 +19,7 @@ function freshPlayer(){return{
   quests:{},questProg:{},
   daily:{date:'',tasks:[],prog:{},claimed:[]},
   login:{last:'',streak:0},
+  reached:{},        // region ids the player has set foot in (unlocks fast travel)
   grave:null,        // {map,x,y,items:[...],gold,left}  left = ms remaining
   stats:{kills:0,deaths:0,chopped:0,mined:0,bossKills:{},legendaries:0,
          playMs:0,bestDrop:null,questsDone:0},
@@ -29,7 +30,7 @@ let P=freshPlayer();
 const lvl=s=>lvlFor(P.xp[s]);
 function totalLevel(){return SKILL_ORDER.reduce((a,s)=>a+lvl(s),0);}
 function maxHp(){
-  let hp=10;
+  let hp=14; /* flat base; the rest comes from gear */
   for(const slot in P.gear){const pc=P.gear[slot];
     if(pc&&GEAR[pc.id]){const st=gearStats(pc);hp+=st.hp||0;}}
   return hp;
@@ -56,7 +57,9 @@ function serialize(){
   for(const m in world)clean.worldDrops[m]=world[m].drops;
   return clean;
 }
+let _resetting=false; /* set by resetSave so autosave/unload can't re-write the wiped save */
 function save(){
+  if(_resetting)return;
   P.ts=Date.now();
   try{store.set(SAVE_KEY,JSON.stringify(serialize()));}catch(e){}
   syncPushSoon();
@@ -110,7 +113,18 @@ function migrateV1(o){
   d.ownedTools=[...new Set(d.ownedTools)];
   return d;
 }
-function resetSave(){store.del(SAVE_KEY);store.del(OLD_KEY);location.reload();}
+/* full reset: wipe the local save, the cloud copy (if syncing), and the cached
+   app code + service worker, then reload into a brand-new game. */
+async function resetSave(){
+  _resetting=true; /* block any further autosave/unload writes from this session */
+  store.del(SAVE_KEY);store.del(OLD_KEY);
+  try{ if(typeof syncEnabled==='function'&&syncEnabled())
+    await fetch('/api/save',{method:'POST',headers:syncHeaders(),
+      body:JSON.stringify({save:{...freshPlayer(),ts:Date.now()}})}); }catch(e){}
+  try{ if(window.caches){const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));} }catch(e){}
+  try{ if('serviceWorker'in navigator){const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.unregister()));} }catch(e){}
+  location.reload();
+}
 
 /* ---------------- inventory ---------------- */
 function invGet(id){return P.inv.find(s=>s.id===id&&!s.gear);}

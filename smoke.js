@@ -51,21 +51,21 @@ setTimeout(()=>{
     for(const e of EB.MAPS[mid].exits){
       const reach=[[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy])=>{
         const c=EB.world[mid].grid[e.y+dy]&&EB.world[mid].grid[e.y+dy][e.x+dx];
-        return c!==undefined&&!['X','R','W','F','#','Q','U','S','~','H','B','K','k'].includes(c);
+        return c!==undefined&&!['X','R','W','F','#','Q','U','S','~','H','B','K','k','V','N'].includes(c);
       });
       if(!reach){mapOk=false;console.log('  exit unreachable',mid,e.x,e.y);}
       // target walkable in destination
       const g=EB.world[e.map].grid[e.ty]&&EB.world[e.map].grid[e.ty][e.tx];
-      const tgtOk=g!==undefined&&!['X','R','W','F','#','Q','U','S','~','H','B','K','k'].includes(g)&&!EB.world[e.map].res.find(r=>r.x===e.tx&&r.y===e.ty);
+      const tgtOk=g!==undefined&&!['X','R','W','F','#','Q','U','S','~','H','B','K','k','V','N'].includes(g)&&!EB.world[e.map].res.find(r=>r.x===e.tx&&r.y===e.ty);
       if(!tgtOk){mapOk=false;console.log('  exit target blocked',mid,'->',e.map,e.tx,e.ty,'tile='+g);}
     }
     for(const m of EB.world[mid].mobs){
       const g=EB.world[mid].grid[m.hy][m.hx];
-      if(['X','R','W','F','#','Q','U','S','~','H','B','K','k'].includes(g)){mapOk=false;console.log('  mob spawn blocked',mid,m.type,m.hx,m.hy);}
+      if(['X','R','W','F','#','Q','U','S','~','H','B','K','k','V','N'].includes(g)){mapOk=false;console.log('  mob spawn blocked',mid,m.type,m.hx,m.hy);}
     }
     for(const n of EB.world[mid].npcs){
       const g=EB.world[mid].grid[n.y][n.x];
-      if(['X','R','W','F','#','Q','U','S','~','H','B','K','k'].includes(g)){mapOk=false;console.log('  npc blocked',mid,n.id);}
+      if(['X','R','W','F','#','Q','U','S','~','H','B','K','k','V','N'].includes(g)){mapOk=false;console.log('  npc blocked',mid,n.id);}
     }
   }
   ok(mapOk,'all 5 maps: exits reachable, targets + spawns walkable');

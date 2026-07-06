@@ -67,10 +67,16 @@ Claude Code can do this after any edit. Never edit `static/game.js` directly.
 
 ## Updating the game later
 
-- Edit `src/*.js`, rebuild `static/game.js` (command above), and **bump the
-  cache version** in `static/sw.js` (`emberbrook-v2.0.0` → `v2.0.1`) so
-  installed clients fetch the new files.
+- Edit `src/*.js`, rebuild `static/game.js` (command above), then **bump the
+  version in two places, keeping them in sync**, so clients fetch the new code:
+  - `static/sw.js` — the `CACHE` constant (`emberbrook-v2.5.2` → `v2.5.3`).
+  - `static/index.html` — the `?v=` on the `game.js` script tag.
+- The service worker is **network-first with `cache: 'no-store'`**, so an online
+  player already gets the newest build on reload; the version bumps refresh the
+  offline copy and force-bust any stale HTTP cache.
 - Commit + push (GitHub Desktop) → Railway redeploys automatically.
+- Players can wipe everything (local save + cloud + cached code) from
+  **Settings ⚙️ → Reset character**.
 
 ## Tests
 

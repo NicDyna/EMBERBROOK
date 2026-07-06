@@ -99,7 +99,9 @@ function boot(){
   $('zone').textContent=MAPS[P.map].name;$('zone').classList.add('go');
   updateHUD();
   if(!hadSave){
-    P.gear.weapon={id:'g_m_1_weapon',r:0};addItem('bread',5);rebuildPlayerSprite();
+    P.gear.weapon={id:'g_m_1_weapon',r:0};
+    P.gear.body={id:'g_m_1_body',r:0};P.gear.legs={id:'g_m_1_legs',r:0};
+    P.hp=maxHp();addItem('bread',5);rebuildPlayerSprite();
     setTimeout(()=>toast('Welcome to Emberbrook! Talk to Elder Rowan to begin.','gold'),400);
   }
   syncNow(false);

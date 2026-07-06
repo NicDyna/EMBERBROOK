@@ -87,7 +87,8 @@ const GEAR={};
         }else{
           const defBase = slot==='body'?2+2*t : slot==='legs'?1+Math.round(1.5*t)
                         : slot==='shield'?2+2*t : 1+t;
-          const hpBase  = slot==='body'?2+t : slot==='shield'?1+t : 1+Math.ceil(t/2);
+          const hpBase  = slot==='body'?4+2*t : slot==='legs'?2+t
+                        : slot==='shield'?2+t : 1+t; /* helmet */
           const lineDef = L==='m'?1 : 0.75;
           g.stats.def=Math.max(1,Math.round(defBase*lineDef));
           g.stats.hp=hpBase;
@@ -140,6 +141,11 @@ const ITEMS={
   ancient_dust:{name:'Ancient Dust',price:0,sell:18,stack:true},
   swamp_herb:{name:'Swamp Herb',price:0,sell:14,stack:true},
   gem:{name:'Gemstone',price:0,sell:60,stack:true},
+  /* biome signature drops (sell for gold; region identity) */
+  spider_silk:{name:'Spider Silk',price:0,sell:16,stack:true},
+  thick_fur:{name:'Thick Fur',price:0,sell:28,stack:true},
+  lion_fang:{name:'Lion Fang',price:0,sell:46,stack:true},
+  scarab_shell:{name:'Scarab Shell',price:0,sell:72,stack:true},
   arrows:{name:'Arrows',price:2,sell:1,stack:true,ammo:true},
   runes:{name:'Runes',price:3,sell:1,stack:true,ammo:true},
   bread:{name:'Bread',price:8,sell:2,stack:true,heal:6},

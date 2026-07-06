@@ -248,6 +248,23 @@ function openCapes(){
   openPanel("Master Aldric's Capes",h);
 }
 
+/* ---------------- fast travel ---------------- */
+function openTravel(){
+  const busy=underAttack();
+  let h='<div class="sect">Fast travel</div>';
+  const dests=[['town','Emberbrook (Town)']];
+  for(const r of REGION_ORDER)if(P.reached&&P.reached[r])dests.push([r,MAPS[r].name]);
+  for(const[id,name]of dests){
+    const here=id===P.map;
+    h+='<div class="qrow"><span>'+esc(name)+(here?' <span class="hint">— here</span>':'')+'</span>'+
+      (here?'<span class="tag">•</span>'
+        :busy?'<span class="tag locked">under attack</span>'
+        :'<button class="btn small" data-act="warp" data-arg="'+id+'">Travel</button>')+'</div>';
+  }
+  h+='<div class="hint">Reach a region on foot once to unlock travel to it. Dungeons are entered from inside their region.</div>';
+  openPanel('Travel',h);
+}
+
 /* ---------------- settings + cloud sync ---------------- */
 function syncStatusText(){
   return SYNC.state==='ok'?'✓ synced '+new Date(SYNC.lastOk).toLocaleTimeString()
@@ -413,7 +430,8 @@ $('pbody').addEventListener('click',ev=>{
       toast('Save imported!','good');closePanel();
     }catch(e){toast('Invalid save code.','bad');}
   }
-  else if(act==='reset'){if(confirm('Delete this character and start over?'))resetSave();}
+  else if(act==='reset'){if(confirm('Reset Emberbrook?\n\nThis deletes your saved character and starts a brand-new game in the current world. This cannot be undone.'))resetSave();}
+  else if(act==='warp'){warpTo(arg);if(P.map===arg)closePanel();else openTravel();}
 });
 $('bInv').addEventListener('click',()=>{ensureAudio();openInventory();});
 $('bEquip').addEventListener('click',()=>{ensureAudio();openEquipment();});
@@ -422,6 +440,7 @@ $('bQuests').addEventListener('click',()=>{ensureAudio();openQuests();});
 $('bMap').addEventListener('click',()=>{ensureAudio();toggleMinimap();});
 $('minimap').addEventListener('click',()=>{minimapOn=false;$('minimap').classList.remove('open');});
 $('bGear').addEventListener('click',()=>{ensureAudio();openSettings();});
+{const bt=$('bTravel');if(bt)bt.addEventListener('click',()=>{ensureAudio();openTravel();});}
 const sb=$('stylebtn');
 if(sb)sb.addEventListener('click',()=>{
   const order=['accurate','aggressive','defensive'];

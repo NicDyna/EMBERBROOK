@@ -251,7 +251,8 @@ function drawMinimap(){
     const ch=W.grid[y][x];
     g.fillStyle = ch==='~'?'#31504f' : (ch==='P'||ch==='E'||ch==='D')?'#8a8578'
       : ch==='B'||ch==='K'?'#6f5340' : (ch==='Q'||ch==='H'||ch==='G')?'#c9a24a'
-      : ch==='k'?'#3f7a3a' : MM_GROUND[ch]||(RES[ch]?gnd:'#33302a');
+      : ch==='k'?'#3f7a3a' : ch==='V'?'#8a929c' : ch==='N'?'#b08f57'
+      : MM_GROUND[ch]||(RES[ch]?gnd:'#33302a');
     g.fillRect(x*cell,y*cell,cell,cell);
   }
   for(const r of W.res){if(!r.alive)continue;

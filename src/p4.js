@@ -190,10 +190,31 @@ function buildSprites(){
     p(5,6,6,8,'#6a716c');p(6,4,4,3,'#6a716c');p(6,5,4,1,'#757c76');
     p(7,8,2,1,'#525a54');p(6,10,4,1,'#525a54');});
   SPR['E']=mk(32,32,(g,p)=>{g.drawImage(SPR['P'],0,0);p(6,7,5,2,'#e8b64c');p(10,5,2,2,'#e8b64c');p(10,9,2,2,'#e8b64c');});
-  /* ---- biome grounds (snow / savanna / desert sand) ---- */
-  SPR['s']=noiseTile('#e2e9f1',['#d1dbe6','#f2f6fa','#c6d0dc'],9);
-  SPR['a']=noiseTile('#a89a4e',['#8f833c','#b8ab5e','#9c8f45'],14);
-  SPR['d']=noiseTile('#d8c489',['#cbb677','#e6d6a0','#c9b06f'],8);
+  /* ---- biome grounds (snow / savanna / desert sand) — characterful ---- */
+  SPR['s']=mkPix(32,32,(g,q)=>{
+    g.fillStyle='#e6edf4';g.fillRect(0,0,32,32);
+    [[3,5,8,4],[19,4,9,4],[22,20,7,5],[4,23,7,4],[13,13,7,3]].forEach(([x,y,w,h])=>q(x,y,w,h,'#dbe4ee'));
+    [[7,10],[24,9],[10,26],[27,24]].forEach(([x,y])=>q(x,y,3,1,'#cdd8e6'));
+    q(12,7,1,1,'#ffffff');q(21,15,1,1,'#ffffff');q(6,20,1,1,'#ffffff');q(28,12,1,1,'#bfe0ff');});
+  SPR['a']=mkPix(32,32,(g,q)=>{
+    g.fillStyle='#a89a4e';g.fillRect(0,0,32,32);
+    [[3,4,7,3],[18,6,9,4],[24,22,6,4],[4,24,7,3],[13,14,7,3]].forEach(([x,y,w,h])=>q(x,y,w,h,'#9c8f45'));
+    [[6,9],[16,5],[25,12],[9,20],[20,25],[28,18],[12,28]].forEach(([x,y])=>{
+      q(x,y-2,1,3,'#8f833c');q(x-1,y-1,1,2,'#8f833c');q(x+1,y-1,1,2,'#8f833c');});
+    q(7,7,1,1,'#c8b95e');q(22,16,1,1,'#c8b95e');});
+  SPR['d']=mkPix(32,32,(g,q)=>{
+    g.fillStyle='#d8c489';g.fillRect(0,0,32,32);
+    for(const y of [5,13,21,29])for(let x=0;x<32;x++){const o=Math.round(Math.sin((x+y)/4)*1.5);
+      q(x,y+o,1,1,'#c9b06f');q(x,y+o-1,1,1,'#e6d6a0');}
+    q(6,3,1,1,'#efe0b0');q(22,9,1,1,'#c9b06f');q(27,24,1,1,'#efe0b0');});
+  /* ---- biome border cliffs (blocking): snow-capped peak, sandstone ---- */
+  SPR['V']=mk(32,32,(g,p)=>{g.fillStyle='#6b7079';g.fillRect(0,0,32,32);
+    for(let r=0;r<4;r++)for(let c2=0;c2<4;c2++){const off=r%2?2:0;
+      p((c2*4+off)%16,r*4,3,3,'#767b84');p((c2*4+off)%16,r*4,3,1,'#828892');}
+    p(0,0,16,2,'#eaf1f8');p(0,2,16,1,'#cdd8e6');p(2,3,3,1,'#f2f7fb');p(9,3,4,1,'#f2f7fb');});
+  SPR['N']=mk(32,32,(g,p)=>{g.fillStyle='#c2a266';g.fillRect(0,0,32,32);
+    for(let r=0;r<8;r++)p(0,r*2,16,1,r%2?'#b08f57':'#cdae72');
+    p(0,0,16,1,'#d8bd85');p(4,2,1,5,'#9c7d4a');p(11,7,1,6,'#9c7d4a');p(7,10,1,4,'#9c7d4a');});
   /* ---- town wall (dressed stone), cactus, dungeon mouth ---- */
   SPR['K']=mk(32,32,(g,p)=>{g.fillStyle='#5b5f66';g.fillRect(0,0,32,32);
     for(let r=0;r<4;r++)for(let c2=0;c2<4;c2++){const off=r%2?2:0;
@@ -565,6 +586,7 @@ const ITEM_ICON={
   logs:['logs','#8a6a42'],oak_logs:['logs','#5b4632'],copper_ore:['ore','#c47f3e'],
   iron_ore:['ore','#9fb0bd'],bone:['bone','#d8d5c8'],wolf_pelt:['pelt','#8b8b8b'],
   ancient_dust:['dust','#b0a0e0'],swamp_herb:['herb','#7af0c9'],gem:['gem','#66e0ff'],
+  spider_silk:['pelt','#d8d5e8'],thick_fur:['pelt','#b9c6d4'],lion_fang:['bone','#e6c48e'],scarab_shell:['gem','#6a8a4e'],
   arrows:['arrow','#b8c4cf'],runes:['rune','#9b7fd1'],
   bread:['bread','#d9a860'],cooked_meat:['meat','#a05a3a'],meat_pie:['pie','#c98b50'],
   stew:['stew','#8a5a3a'],
