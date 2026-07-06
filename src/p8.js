@@ -136,9 +136,10 @@ function boot(){
 
 /* ---------------- debug handle ---------------- */
 window.EB={world,MAPS,ITEMS,TOOLS,GEAR,MOBS,CAPES,RARITY,QUESTS,RES,RECIPES,
+ FUSIONS,FUSE_RECIPES,FUSE_ORDER,EFFECTS,MOB_FUSION_DROP,weaponEffects,
  update,camera,setGather,setFight,setLoot,openBank,openShop,openInventory,openEquipment,
  openSkills,openQuests,openQuestBoard,openSettings,openDialog,openMonument,openCapes,openBestiary,
- openCraft,doCraft,craftMax,craftReq,
+ openCraft,doCraft,craftMax,craftReq,openFuse,doFuse,
  addItem,addGear,invCount,equipGear,unequip,gearBonus,playerAttack,rollLoot,rollRarity,
  spawnDrop,pickupDrop,pickupOne,openFloorMenu,killMob,eatFood,save,load,serialize,applySave,migrateV1,
  hurtPlayer,die,maxHp,lvlFor,totalLevel,questState,freshPlayer,rebuildPlayerSprite,

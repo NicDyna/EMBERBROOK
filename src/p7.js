@@ -44,7 +44,8 @@ function invInfoHtml(i){
     return '<b style="color:'+gearColor(s.gear)+'">'+esc(gearName(s.gear))+'</b><br>'+
       esc(stats)+'<br><span class="hint">'+SKILLS[g.reqSkill].name+' '+g.req+
       (g.spd?' · speed '+(g.spd/1000)+'s':'')+ (g.ammo?' · uses '+ITEMS[g.ammo].name:'')+'</span>'+
-      (g.unique&&g.perkDesc?'<br><span style="color:#ff8a3a">✦ '+esc(g.perkDesc)+'</span>':'')+'<br>'+
+      (g.unique&&g.perkDesc?'<br><span style="color:#ff8a3a">✦ '+esc(g.perkDesc)+'</span>':'')+
+      (g.fusion?weaponEffects(s.gear).map(e=>'<br><span style="color:'+EFFECTS[e.k].color+'">✦ '+esc(effDesc(e.k,e.greater))+'</span>').join(''):'')+'<br>'+
       (chk.ok?'<button class="btn small" data-act="equip" data-arg="'+i+'">Equip</button>'
              :'<span class="tag locked">'+esc(chk.why)+'</span>')+
       ' <button class="btn small danger" data-act="drop" data-arg="'+i+'">Drop</button>';
@@ -73,6 +74,12 @@ function openEquipment(){
   h+='<div class="hint">Tap a piece to unequip · HP +'+(maxHp()-10)+' from gear</div>';
   h+='<div class="statline">acc +'+Math.round(b.acc)+' · pow +'+Math.round(b.pow)+
      ' · def +'+Math.round(b.def)+(b.rpow?' · ranged +'+b.rpow:'')+(b.mpow?' · magic +'+b.mpow:'')+'</div>';
+  const wpn=P.gear.weapon;
+  if(wpn&&GEAR[wpn.id]&&GEAR[wpn.id].fusion){
+    h+='<div class="sect">Weapon effects</div>';
+    for(const e of weaponEffects(wpn))
+      h+='<div class="qrow"><span style="color:'+EFFECTS[e.k].color+'">✦ '+esc(effDesc(e.k,e.greater))+'</span><span class="hint">'+esc(EFFECTS[e.k].desc)+'</span></div>';
+  }
   if(combatMode()==='melee'){
     h+='<div class="sect">Melee style — trains the chosen skill</div><div class="stylerow">';
     for(const[st,label,sk]of[['accurate','🎯 Accurate','attack'],['aggressive','⚔️ Aggressive','strength'],['defensive','🛡️ Defensive','defence']])
@@ -334,6 +341,44 @@ function openCraft(){
   openPanel('Forge — Crafting '+lvl('crafting'),h);
 }
 
+/* ---------------- Forgemaster Hilde (special-weapon fusion) ---------------- */
+function fuseDot(k){return '<span title="'+esc(effDesc(k,false))+'" style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+EFFECTS[k].color+';margin-right:2px"></span>';}
+function openFuse(){
+  const upPct=Math.round(fuseUpgradeChance()*100);
+  let h='<div class="hint">Fuse special weapons into stronger ones — 10 → 6 → 3 → 1. Inputs are consumed; the result keeps the highest input rarity. Crafting '+lvl('crafting')+' → '+upPct+'% chance to upgrade each effect to its Greater form.</div>';
+  let discoveredCount=0,total=0;
+  for(let tier=2;tier<=4;tier++){
+    const ids=FUSE_ORDER.filter(id=>GEAR[id].ftier===tier);
+    h+='<div class="sect">Tier '+tier+(tier===4?' — the Godsword':'')+'</div>';
+    for(const id of ids){
+      total++;
+      const rec=FUSE_RECIPES[id],g=GEAR[id];
+      const discovered=rec.in.some(inId=>P.discovered&&P.discovered[inId]);
+      if(discovered)discoveredCount++;
+      if(!discovered){
+        h+='<div class="qrow dim"><span><b style="color:var(--dim)">?</b> &nbsp;???</span><span class="tag locked">undiscovered</span></div>';
+        continue;
+      }
+      const inStr=rec.in.map(inId=>{const have=P.inv.some(s=>s.gear&&s.gear.id===inId);
+        return '<span style="color:'+(have?'var(--dim)':'#f0b0a5')+'">'+esc(GEAR[inId].name)+(have?'':' ✗')+'</span>';}).join(' + ');
+      const fxStr=g.fx.map(k=>fuseDot(k)+EFFECTS[k].name).join(' &nbsp;');
+      const need=[];const idxs=[];
+      for(const inId of rec.in){const i=P.inv.findIndex((s,k)=>s.gear&&s.gear.id===inId&&!idxs.includes(k));
+        if(i<0)need.push(inId);else idxs.push(i);}
+      const haveAll=need.length===0,atkOk=lvl('attack')>=g.req,goldOk=P.gold>=rec.gold;
+      const can=haveAll&&atkOk&&goldOk;
+      h+='<div class="qrow"><span><img class="mini" src="'+iconURL(id)+'" alt=""> '+esc(g.name)+
+        '<br><span class="hint">'+inStr+' &nbsp;+ '+rec.gold+'g · Atk '+g.req+'</span>'+
+        '<br><span class="hint">'+fxStr+'</span></span>'+
+        (can?'<button class="btn small" data-act="fuse" data-arg="'+id+'">Fuse</button>'
+            :!atkOk?'<span class="tag locked">Atk '+g.req+'</span>'
+            :!haveAll?'<span class="tag locked">need parts</span>'
+            :'<span class="tag locked">'+rec.gold+'g</span>')+'</div>';
+    }
+  }
+  openPanel('Forgemaster — '+discoveredCount+'/'+total+' known · '+P.gold+'g',h);
+}
+
 /* ---------------- Master Aldric (capes) ---------------- */
 function openCapes(){
   let h='<div class="sect">Capes of Accomplishment — 5,000g each at level 50</div>';
@@ -437,6 +482,7 @@ function openDialog(npc){
   if(npc.role==='shop')addOpt(opts,'⚒ Trade',()=>{closeDialog();openShop();});
   if(npc.role==='shop')addOpt(opts,'🔨 Craft',()=>{closeDialog();openCraft();});
   if(npc.role==='capes')addOpt(opts,'🎽 Capes of Accomplishment',()=>{closeDialog();openCapes();});
+  if(npc.role==='fuse')addOpt(opts,'⚔ Fuse special weapons',()=>{closeDialog();openFuse();});
   addOpt(opts,'Farewell.',closeDialog);
   $('dialog').classList.add('open');
 }
@@ -532,6 +578,7 @@ $('pbody').addEventListener('click',ev=>{
     const n=cnt==='all'?craftMax(RECIPES[rid]):+cnt;
     if(n>0)doCraft(rid,n);openCraft();
   }
+  else if(act==='fuse'){doFuse(arg);openFuse();}
   else if(act==='sell'){const s=P.inv[+arg];if(s&&ITEMS[s.id]){const g=ITEMS[s.id].sell*s.qty;P.inv.splice(+arg,1);addGold(g);sfx('coin');toast('Sold for '+g+'g','gold');openShop();}}
   else if(act==='sellgear'){const s=P.inv[+arg];if(s&&s.gear){const g=gearSellValue(s.gear);P.inv.splice(+arg,1);addGold(g);sfx('coin');toast('Sold '+gearName(s.gear)+' for '+g+'g','gold');openShop();}}
   else if(act==='bulksell'){

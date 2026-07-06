@@ -54,7 +54,14 @@ function combatMode(){ // 'melee'|'ranged'|'magic'
   if(!w)return'melee';
   return w.line==='r'?'ranged':w.line==='g'?'magic':'melee';
 }
-function weaponRange(){const m=combatMode();return m==='melee'?1:m==='ranged'?4:5;}
+function weaponRange(){
+  const m=combatMode();
+  if(m!=='melee')return m==='ranged'?4:5;
+  let r=1; /* the 'reach' effect extends melee range */
+  for(const e of weaponEffects(P.gear.weapon))
+    if(e.k==='reach')r+=(e.greater?EFFECTS.reach.g:EFFECTS.reach.mag).range;
+  return r;
+}
 function weaponSpeed(){
   const w=P.gear.weapon&&GEAR[P.gear.weapon.id];
   let spd=w?w.spd:2400;
@@ -193,9 +200,10 @@ function pickupDrop(d){
   for(const it of d.items){
     if(it.gear){
       if(addGear(it.gear)){
-        const nm=gearName(it.gear),r=it.gear.r||0;
-        bestiaryCredit(it.src,it.gear.id.slice(0,2)==='u_'?it.gear.id:'gear',1);
-        if(r>=3){itemPopup(it.gear);P.stats.bestDrop=nm;if(r>=4)P.stats.legendaries++;}
+        const nm=gearName(it.gear),r=it.gear.r||0,g0=GEAR[it.gear.id],special=g0&&(g0.fusion||g0.unique);
+        bestiaryCredit(it.src,special?it.gear.id:'gear',1);
+        if(special)markDiscovered(it.gear.id);
+        if(r>=3||special){itemPopup(it.gear);P.stats.bestDrop=nm;if(r>=4)P.stats.legendaries++;}
         else{toast('+ '+nm,r>=2?'gold':'drop');sfx('loot');}
       }else{remain.push(it);toast('Inventory full','bad');}
     }else{
@@ -224,9 +232,10 @@ function pickupOne(d,spec){
     const it=spec;
     if(it.gear){
       if(!addGear(it.gear))return 'full';
-      const nm=gearName(it.gear),r=it.gear.r||0;
-      bestiaryCredit(it.src,it.gear.id.slice(0,2)==='u_'?it.gear.id:'gear',1);
-      if(r>=3){itemPopup(it.gear);P.stats.bestDrop=nm;if(r>=4)P.stats.legendaries++;}
+      const nm=gearName(it.gear),r=it.gear.r||0,g0=GEAR[it.gear.id],special=g0&&(g0.fusion||g0.unique);
+      bestiaryCredit(it.src,special?it.gear.id:'gear',1);
+      if(special)markDiscovered(it.gear.id);
+      if(r>=3||special){itemPopup(it.gear);P.stats.bestDrop=nm;if(r>=4)P.stats.legendaries++;}
       else{toast('+ '+nm,r>=2?'gold':'drop');sfx('loot');}
     }else{
       if(!addItem(it.id,it.qty))return 'full';
@@ -260,6 +269,9 @@ function rollLoot(mob){
   }
   /* boss signature drop: ~14% chance to also drop its unique (rarity 5) */
   if(d.unique&&GEAR[d.unique]&&Math.random()<0.14)out.items.push({gear:{id:d.unique,r:5}});
+  /* fusion ingredient: the source creature rarely drops its tier-1 special */
+  const fd=MOB_FUSION_DROP[mob.type];
+  if(fd&&GEAR[fd]&&Math.random()<FUSION_DROP_CHANCE)out.items.push({gear:{id:fd,r:rollRarity(d.rarityBoost||0)}});
   return out;
 }
 
@@ -353,9 +365,18 @@ function doAction(){
       P.atkT=T;
       const md=MOBS[t.type];
       const tri=triangle(mode,md.style);
-      const chance=hitChance(atk.acc*(tri>1?1.07:tri<1?0.93:1), md.def*2+8);
+      const fx=mode==='melee'?weaponEffects(P.gear.weapon):[]; /* fusion on-hit effects */
+      /* crush: ignore part of the target's armour */
+      let defRoll=md.def*2+8;
+      for(const e of fx)if(e.k==='crush')defRoll*=(1-(e.greater?EFFECTS.crush.g:EFFECTS.crush.mag).pct);
+      const chance=hitChance(atk.acc*(tri>1?1.07:tri<1?0.93:1), defRoll);
       let dmg=0;
-      if(Math.random()<chance)dmg=Math.max(1,Math.round(rand(Math.ceil(atk.maxHit*0.35),atk.maxHit)*tri));
+      if(Math.random()<chance){
+        dmg=Math.max(1,Math.round(rand(Math.ceil(atk.maxHit*0.35),atk.maxHit)*tri));
+        /* execute: extra damage to wounded foes */
+        for(const e of fx)if(e.k==='execute'){const em=e.greater?EFFECTS.execute.g:EFFECTS.execute.mag;
+          if(t.hp/md.hp<=em.hp)dmg=Math.round(dmg*(1+em.pct));}
+      }
       if(mode==='ranged'){shoot(P.px+16,P.py+8,t.px+16,t.py+8,'#d8d5c8');sfx('shoot');}
       else if(mode==='magic'){shoot(P.px+16,P.py+8,t.px+16,t.py+8,'#b06fd1');sfx('zap');}
       else sfx('hit');
@@ -366,14 +387,86 @@ function doAction(){
         spawnParticles(t.px+16,t.py+8,mode==='magic'?'#c9a5ff':mode==='ranged'?'#e8e2c8':'#ffd27a',big?9:5,big?1.6:1);
         gainXp(trainSkill(),dmg*4);
         if(mode!=='melee')dailyEvent('stylehit',null,1);
+        if(fx.length)applyOnHit(t,dmg,fx);
       }
+      if(fx.length)slashSwing(t,fx,atk); /* slashwave counts every swing, hit or miss */
       if(t.hp<=0)killMob(t);
     }
   }
 }
+/* ---------------- fusion weapon on-hit effects (§9) ---------------- */
+const DOT_INTERVAL=600; /* ms between damage-over-time ticks */
+function addDot(m,k,dmg,ticks){
+  m.dots=m.dots||[];
+  const ex=m.dots.find(d=>d.k===k);
+  if(ex){ex.dmg=Math.max(ex.dmg,dmg);ex.ticks=Math.max(ex.ticks,ticks);}
+  else m.dots.push({k,dmg,ticks,next:T+DOT_INTERVAL,skill:trainSkill()});
+}
+function tickDots(m){
+  if(!m.dots||!m.dots.length)return;
+  for(let i=m.dots.length-1;i>=0;i--){
+    const dt=m.dots[i];if(T<dt.next)continue;
+    dt.next=T+DOT_INTERVAL;dt.ticks--;
+    m.hp-=dt.dmg;
+    floater(m.px+16,m.py-6,'-'+dt.dmg,EFFECTS[dt.k].color,9);
+    spawnParticles(m.px+16,m.py+6,EFFECTS[dt.k].color,3,0.7);
+    gainXp(dt.skill,dt.dmg*2);
+    if(dt.ticks<=0)m.dots.splice(i,1);
+    if(m.hp<=0){killMob(m);return;}
+  }
+}
+function knockbackMob(m,tiles){
+  if(m.moving)return;
+  const dx=Math.sign(m.tx-P.tx),dy=Math.sign(m.ty-P.ty);
+  if(!dx&&!dy)return;
+  let nx=m.tx,ny=m.ty;
+  for(let i=0;i<tiles;i++){const tx=nx+dx,ty=ny+dy;
+    if(walkable(P.map,tx,ty)&&!mobAt(P.map,tx,ty)&&!(tx===P.tx&&ty===P.ty)){nx=tx;ny=ty;}else break;}
+  if(nx!==m.tx||ny!==m.ty){m.tx=nx;m.ty=ny;m.px=nx*TILE;m.py=ny*TILE;}
+}
+function cleaveHit(primary,dmg,pct){ /* splash to every other foe around the player */
+  const extra=Math.max(1,Math.round(dmg*pct));
+  for(const m of world[P.map].mobs){
+    if(m===primary||!m.alive)continue;
+    if(distTiles(m.tx,m.ty,P.tx,P.ty)<=1){
+      m.hp-=extra;m.aggro=true;floater(m.px+16,m.py-6,'-'+extra,'#e8c451',9);
+      if(m.hp<=0)killMob(m);
+    }
+  }
+}
+function pierceHit(primary,dmg,range){ /* run through foes in a line beyond the target */
+  const dx=Math.sign(primary.tx-P.tx),dy=Math.sign(primary.ty-P.ty);
+  if(!dx&&!dy)return;
+  const extra=Math.max(1,Math.round(dmg*0.6));
+  for(let i=1;i<=range;i++){const m=mobAt(P.map,P.tx+dx*i,P.ty+dy*i);
+    if(m&&m!==primary&&m.alive){m.hp-=extra;m.aggro=true;floater(m.px+16,m.py-6,'-'+extra,'#8fe0ff',9);if(m.hp<=0)killMob(m);}}
+}
+function slashSwing(t,fx,atk){ /* every Nth swing looses a blade wave along facing */
+  for(const e of fx)if(e.k==='slashwave'){
+    const sm=e.greater?EFFECTS.slashwave.g:EFFECTS.slashwave.mag;
+    P.swing=(P.swing||0)+1;
+    if(P.swing%sm.every!==0)continue;
+    const wave=Math.max(1,Math.round(atk.maxHit*sm.pct));
+    shoot(P.px+16,P.py+8,P.px+16+P.facing*90,P.py+8,'#f0c419');
+    for(let i=1;i<=3;i++){const m=mobAt(P.map,P.tx+P.facing*i,P.ty);
+      if(m&&m.alive){m.hp-=wave;m.aggro=true;floater(m.px+16,m.py-6,'-'+wave,'#f0c419',10);if(m.hp<=0)killMob(m);}}
+  }
+}
+function applyOnHit(t,dmg,fx){
+  const alive=t.hp>0;
+  for(const e of fx){
+    const k=e.k,mg=e.greater?EFFECTS[k].g:EFFECTS[k].mag;
+    if(EFFECTS[k].dot){if(alive)addDot(t,k,mg.dmg,mg.ticks);}
+    else if(k==='lifesteal'){const heal=Math.max(1,Math.round(dmg*mg.pct));
+      if(P.hp<maxHp()){P.hp=Math.min(maxHp(),P.hp+heal);floater(P.px+8,P.py-20,'+'+heal,'#c98bff',9);updateHUD();}}
+    else if(k==='knockback'){if(alive)knockbackMob(t,mg.tiles);}
+    else if(k==='cleave')cleaveHit(t,dmg,mg.pct);
+    else if(k==='pierce')pierceHit(t,dmg,mg.range);
+  }
+}
 function killMob(m){
   const d=MOBS[m.type];
-  m.alive=false;m.aggro=false;m.respawnAt=T+(d.respawn||9000);
+  m.alive=false;m.aggro=false;m.dots=[];m.respawnAt=T+(d.respawn||9000);
   gainXp(trainSkill(),d.xp);
   const loot=rollLoot(m);loot.src=m.type; /* tag for the bestiary */
   spawnDrop(P.map,m.tx,m.ty,loot);
@@ -386,8 +479,12 @@ function killMob(m){
     levelFlash(d.name+' defeated!');shake(6);
   }
   questEvent('kill',m.type,P.map);
-  const next=nearestMob(m.type,P.tx,P.ty);
-  if(next)setFight(next);else P.action=null;
+  /* only auto-chain to the next foe when we were actually fighting — an off-screen
+     DoT/cleave/pierce kill must not hijack gathering or walking */
+  if(P.action&&P.action.kind==='fight'){
+    const next=nearestMob(m.type,P.tx,P.ty);
+    if(next)setFight(next);else P.action=null;
+  }
   save();
 }
 function hurtPlayer(dmg){
@@ -425,9 +522,11 @@ function updateMobs(){
   for(const m of W.mobs){
     const d=MOBS[m.type];
     if(!m.alive){
-      if(T>=m.respawnAt){m.alive=true;m.hp=d.hp;m.tx=m.hx;m.ty=m.hy;m.px=m.tx*TILE;m.py=m.ty*TILE;m.moving=null;}
+      if(T>=m.respawnAt){m.alive=true;m.hp=d.hp;m.dots=[];m.tx=m.hx;m.ty=m.hy;m.px=m.tx*TILE;m.py=m.ty*TILE;m.moving=null;}
       continue;
     }
+    tickDots(m);
+    if(!m.alive)continue; /* a DoT tick may have killed it */
     stepEntity(m);
     if(m.moving)continue;
     if(d.aggro&&!m.aggro&&distTiles(m.tx,m.ty,P.tx,P.ty)<=4)m.aggro=true;

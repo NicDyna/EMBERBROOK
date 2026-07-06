@@ -160,6 +160,9 @@ function draw(){
         const any=SKILL_ORDER.some(s=>lvl(s)>=MAX_LVL&&!P.capes.includes('cape_'+s));
         if(any)mark='!';
       }
+      if(n.role==='fuse'){
+        if(P.inv.some(s=>s.gear&&GEAR[s.gear.id]&&GEAR[s.gear.id].fusion))mark='!';
+      }
       if(mark){
         const nbob=Math.sin(T/300)*2;
         ctx.font='bold 12px monospace';ctx.textAlign='center';
@@ -179,6 +182,29 @@ function draw(){
           ctx.fillStyle='#000000aa';ctx.fillRect(P.px+4,P.py-8,24,4);
           ctx.fillStyle='#e8b64c';ctx.fillRect(P.px+5,P.py-7,22*Math.min(1,P.action.prog/speed),2);}
       }
+    }
+  }
+  /* interaction highlight: a soft light-yellow outline around whatever the
+     player is currently acting on — a resource, a mob, or an NPC */
+  if(P.action){
+    const tgt=findTarget();
+    let bx=null;
+    if(tgt){
+      if(P.action.kind==='gather'&&tgt.alive){
+        const tree=RES[tgt.type]&&RES[tgt.type].skill==='woodcutting';
+        const sway=Math.sin(T/900+tgt.x*1.3)*0.8;
+        bx=tree?[tgt.x*TILE+sway,tgt.y*TILE-16,32,48]:[tgt.x*TILE,tgt.y*TILE,32,32];
+      }else if(P.action.kind==='fight'&&tgt.alive){
+        bx=MOBS[tgt.type].boss?[tgt.px-16,tgt.py-32,64,64]:[tgt.px,tgt.py,32,32];
+      }else if(P.action.kind==='talk'){
+        bx=[tgt.px,tgt.py-12,32,44];
+      }
+    }
+    if(bx){
+      const a=0.55+0.25*Math.sin(T/220); /* gentle pulse */
+      ctx.strokeStyle='rgba(240,226,140,'+a.toFixed(2)+')';
+      ctx.lineWidth=1.5;
+      ctx.strokeRect(bx[0]-1,bx[1]-1,bx[2]+2,bx[3]+2);
     }
   }
   /* place + street labels, drawn above the buildings for readability */

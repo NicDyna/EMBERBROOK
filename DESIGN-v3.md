@@ -127,7 +127,19 @@ attacker, target)` + timed effect entries on mob state, covering the 11 keywords
    (safe skilling belt north, high-tier nodes among mobs in the deep south); base crafting via a **recipe
    station** at the Forge (Smelting/Fletching/Smithing — ore→bars→base melee gear, logs→arrows). smoke.js
    extended (+17 assertions, deterministic).
-4. ⏳ **Effects engine + fusion tree (§9, §4)** — endgame payoff; depends on 3. **NEXT.**
+4. ✅ **Effects engine + fusion tree (§9, §4)** — endgame payoff. Done 2026-07-07.
+   **Effects engine:** 11 keywords wired into combat — `burn/poison/bleed` real DoTs (ticked every
+   600ms on mob state, survive disengage), `cleave` (splash to adjacent foes), `pierce` (line beyond
+   target), `knockback`, `reach` (+range), `crush` (armour ignore), `execute` (bonus vs <25% HP),
+   `lifesteal`, `slashwave` (every-Nth-swing blade). Each has a base + "greater" variant.
+   **Fusion tree:** 20 melee specials (10 tier-1 drops → 6 → 3 → 1 Godsword), authored in `FUSIONS`/
+   `FUSE_RECIPES` since the referenced `emberbrook-weapons.md` was never committed. Tier-1s drop rarely
+   (5%) from mapped creatures; **Forgemaster Hilde** NPC in town runs the fusion UI (visible recipe list,
+   silhouette until an ingredient is held, gold fees 5k/25k/100k, result rarity = highest input).
+   **Crafting upgrade roll** at fuse time (5%@1 → 60%@50 Crafting) may bump each effect to Greater.
+   Stats rescaled to the live curve (rune≈+20 pow → Godsword +42). smoke.js +18 assertions (92 total,
+   deterministic). **Open for retuning:** effect magnitudes, weapon stats, drop sources — all in one
+   data table in `p1.js`, cheap to adjust to the original spec if it resurfaces.
 
 Each phase: edit `src/`, rebuild `static/game.js`, bump `sw.js`, run + extend `smoke.js`.
 

@@ -126,6 +126,103 @@ const UNIQUES={
     GEAR[id]=g;
   }
 })();
+/* ============================================================
+   FUSION WEAPONS (Phase 4) — special melee weapons layered on top of the
+   bronze→rune tiers. A Terraria-style tree: 10 tier-1 specials (each a rare
+   drop from a creature) fuse 10→6→3→1 into the endgame Godsword. Each carries
+   fixed on-hit EFFECTS; the Crafting-skill upgrade roll at fuse time may bump an
+   effect to its "greater" variant. Melee-only for now (DESIGN-v3 §4).
+   ============================================================ */
+/* the 11 combat effect keywords (§9). `mag` = base, `g` = greater variant.
+   dot:true → damage-over-time applied to the mob and ticked in updateMobs. */
+const EFFECTS={
+  burn:     {name:'Burn',     dot:true, color:'#ff8a3a', mag:{dmg:3,ticks:3},   g:{dmg:5,ticks:4},   desc:'Ignites the foe'},
+  poison:   {name:'Poison',   dot:true, color:'#7fd17f', mag:{dmg:2,ticks:5},   g:{dmg:4,ticks:5},   desc:'Poisons over time'},
+  bleed:    {name:'Bleed',    dot:true, color:'#d9534f', mag:{dmg:4,ticks:3},   g:{dmg:6,ticks:4},   desc:'Deep bleeding wounds'},
+  cleave:   {name:'Cleave',   color:'#e8c451', mag:{pct:0.6},         g:{pct:1.0},         desc:'Strikes every foe around you'},
+  pierce:   {name:'Pierce',   color:'#8fe0ff', mag:{range:2},         g:{range:3},         desc:'Runs foes through in a line'},
+  knockback:{name:'Knockback',color:'#cfc9bd', mag:{tiles:1},         g:{tiles:2},         desc:'Hurls the target back'},
+  reach:    {name:'Reach',    color:'#b9c6d4', mag:{range:1},         g:{range:2},         desc:'Extends your attack range'},
+  crush:    {name:'Crush',    color:'#a08c78', mag:{pct:0.25},        g:{pct:0.5},         desc:'Ignores part of armour'},
+  execute:  {name:'Execute',  color:'#ff6a5a', mag:{pct:0.5,hp:0.25}, g:{pct:1.0,hp:0.30}, desc:'Devastates wounded foes'},
+  lifesteal:{name:'Lifesteal',color:'#c98bff', mag:{pct:0.10},        g:{pct:0.20},        desc:'Heals you as you strike'},
+  slashwave:{name:'Slash Wave',color:'#f0c419',mag:{every:3,pct:0.6}, g:{every:2,pct:0.8}, desc:'Looses a blade of force'},
+};
+function effDesc(k,greater){ /* human-readable magnitude for the current variant */
+  const e=EFFECTS[k],m=greater?e.g:e.mag,gp=greater?'Greater ':'';
+  if(e.dot)return gp+e.name+' ('+m.dmg+' dmg × '+m.ticks+')';
+  if(k==='cleave')return gp+e.name+' ('+Math.round(m.pct*100)+'% splash)';
+  if(k==='pierce')return gp+e.name+' (line of '+m.range+')';
+  if(k==='knockback')return gp+e.name+' (+'+m.tiles+' tile)';
+  if(k==='reach')return gp+e.name+' (+'+m.range+' range)';
+  if(k==='crush')return gp+e.name+' (−'+Math.round(m.pct*100)+'% armour)';
+  if(k==='execute')return gp+e.name+' (+'+Math.round(m.pct*100)+'% <'+Math.round(m.hp*100)+'% HP)';
+  if(k==='lifesteal')return gp+e.name+' ('+Math.round(m.pct*100)+'% heal)';
+  if(k==='slashwave')return gp+e.name+' (every '+m.every+' hits)';
+  return gp+e.name;
+}
+/* the 20-weapon tree. tier 1 = drops; 2/3/4 = fused. All melee weapons. */
+const FUSIONS={
+  /* --- tier 1: 10 signature drops (drop-source in `drop`) --- */
+  fw_venomfang:  {name:'Venomfang Dirk', tier:1,req:40,color:'#7ad17f',stats:{acc:30,pow:22},fx:['poison'],   drop:'spider'},
+  fw_ripper:     {name:'Ripper Blade',   tier:1,req:40,color:'#d9534f',stats:{acc:29,pow:23},fx:['bleed'],    drop:'bandit'},
+  fw_boarcleaver:{name:'Boar Cleaver',   tier:1,req:40,color:'#c98b50',stats:{acc:28,pow:24},fx:['cleave'],   drop:'boar'},
+  fw_frostbrand: {name:'Frostbrand',     tier:1,req:41,color:'#8fe0ff',stats:{acc:30,pow:22},fx:['burn'],     drop:'frost_wolf'},
+  fw_piercer:    {name:'Shardpiercer',   tier:1,req:41,color:'#bfe0ff',stats:{acc:31,pow:22},fx:['pierce'],   drop:'ice_sprite'},
+  fw_tremor:     {name:'Tremor Maul',    tier:1,req:42,color:'#a08c78',stats:{acc:28,pow:25},fx:['knockback'],drop:'snow_troll'},
+  fw_glaive:     {name:"Reachglaive",    tier:1,req:42,color:'#d0a83a',stats:{acc:30,pow:23},fx:['reach'],    drop:'steppe_lion'},
+  fw_sunderer:   {name:'Sunderer',       tier:1,req:43,color:'#9fb0bd',stats:{acc:29,pow:24},fx:['crush'],    drop:'nomad'},
+  fw_reaperedge: {name:"Reaper's Edge",  tier:1,req:43,color:'#ff6a5a',stats:{acc:31,pow:23},fx:['execute'],  drop:'scorpion'},
+  fw_leechblade: {name:'Leechblade',     tier:1,req:44,color:'#c98bff',stats:{acc:30,pow:23},fx:['lifesteal'],drop:'sand_wraith'},
+  /* --- tier 2: 6 weapons (2 inputs, 5,000g) --- */
+  fw_plaguecleaver:{name:'Plaguecleaver',tier:2,req:45,color:'#8fd17f',stats:{acc:34,pow:28},fx:['poison','cleave']},
+  fw_gorehowl:     {name:'Gorehowl',     tier:2,req:45,color:'#d96a53',stats:{acc:33,pow:29},fx:['bleed','knockback']},
+  fw_flamereach:   {name:'Flamereach',   tier:2,req:45,color:'#ffb04a',stats:{acc:35,pow:27},fx:['burn','reach']},
+  fw_impaler:      {name:'Impaler',      tier:2,req:45,color:'#9fd0e0',stats:{acc:34,pow:28},fx:['pierce','crush']},
+  fw_soulrender:   {name:'Soulrender',   tier:2,req:45,color:'#d08bff',stats:{acc:34,pow:28},fx:['execute','lifesteal']},
+  fw_wolfsbane:    {name:'Wolfsbane',    tier:2,req:45,color:'#9ad9a0',stats:{acc:33,pow:29},fx:['burn','poison']},
+  /* --- tier 3: 3 weapons (2 inputs, 25,000g) --- */
+  fw_doomblade:    {name:'Doomblade',    tier:3,req:48,color:'#c0504a',stats:{acc:40,pow:34},fx:['poison','cleave','bleed']},
+  fw_worldpiercer: {name:'Worldpiercer', tier:3,req:48,color:'#7fbfe0',stats:{acc:40,pow:34},fx:['pierce','crush','knockback']},
+  fw_reaperofsouls:{name:'Reaper of Souls',tier:3,req:48,color:'#b06fd1',stats:{acc:41,pow:35},fx:['execute','lifesteal','burn']},
+  /* --- tier 4: the Godsword (3 inputs, 100,000g) --- */
+  fw_godsword:     {name:'Godsword of Emberbrook',tier:4,req:50,color:'#f0c419',stats:{acc:48,pow:42},fx:['cleave','execute','lifesteal','slashwave']},
+};
+(function buildFusions(){
+  for(const id in FUSIONS){const f=FUSIONS[id];
+    GEAR[id]={id,name:f.name,line:'m',tier:6,slot:'weapon',req:f.req,reqSkill:'attack',
+      color:f.color,stats:{...f.stats},spd:2400,fusion:true,ftier:f.tier,fx:f.fx};
+  }
+})();
+/* recipes: result → inputs + gold fee. Gated on Attack level (result.req). */
+const FUSE_RECIPES={
+  fw_plaguecleaver:{in:['fw_venomfang','fw_boarcleaver'],gold:5000},
+  fw_gorehowl:     {in:['fw_ripper','fw_tremor'],gold:5000},
+  fw_flamereach:   {in:['fw_frostbrand','fw_glaive'],gold:5000},
+  fw_impaler:      {in:['fw_piercer','fw_sunderer'],gold:5000},
+  fw_soulrender:   {in:['fw_reaperedge','fw_leechblade'],gold:5000},
+  fw_wolfsbane:    {in:['fw_frostbrand','fw_venomfang'],gold:5000},
+  fw_doomblade:    {in:['fw_plaguecleaver','fw_gorehowl'],gold:25000},
+  fw_worldpiercer: {in:['fw_flamereach','fw_impaler'],gold:25000},
+  fw_reaperofsouls:{in:['fw_soulrender','fw_wolfsbane'],gold:25000},
+  fw_godsword:     {in:['fw_doomblade','fw_worldpiercer','fw_reaperofsouls'],gold:100000},
+};
+const FUSE_ORDER=Object.keys(FUSE_RECIPES);
+/* creature → the tier-1 fusion weapon it can rarely drop (see rollLoot) */
+const MOB_FUSION_DROP={};
+for(const _id in FUSIONS)if(FUSIONS[_id].drop)MOB_FUSION_DROP[FUSIONS[_id].drop]=_id;
+const FUSION_DROP_CHANCE=0.05; /* per-kill chance for the source creature */
+/* effect list for an owned weapon piece, applying its per-instance greater
+   upgrades (piece.up = array of upgraded effect keys, rolled at fuse time). */
+function weaponEffects(piece){
+  if(!piece)return[];
+  const g=GEAR[piece.id];if(!g||!g.fx)return[];
+  const up=piece.up||[];
+  return g.fx.map(k=>({k,greater:up.includes(k)}));
+}
+/* upgrade chance scales with Crafting level: ~5% @1 → ~60% @50 */
+function fuseUpgradeChance(){return 0.05+(clamp(lvl('crafting'),1,MAX_LVL)-1)/(MAX_LVL-1)*0.55;}
+
 /* effective stats of an owned gear piece {id, r} */
 function gearStats(piece){
   const g=GEAR[piece.id]; if(!g)return{};
@@ -410,6 +507,7 @@ const NPCS={
     "Whisperwood, then the frozen peaks, the plains, and the deep desert. Few return.",
     "The real treasures lie in the dungeons. So do the things that guard them."]},
   skillmaster:{name:'Master Aldric',role:'capes'},
+  forgemaster:{name:'Forgemaster Hilde',role:'fuse'},
 };
 
 /* ---------------- quests (7, linear) ---------------- */
@@ -470,7 +568,7 @@ const MAPS={
    {x:30,y:23,w:3,d:3,type:'house_a'},
    {x:24,y:26,w:3,d:3,type:'tower', label:'BÜCHELTURM'}],
   npcs:[{id:'banker',x:9,y:12},{id:'smith',x:30,y:19},{id:'elder',x:14,y:20},
-        {id:'skillmaster',x:25,y:14},{id:'guard',x:22,y:26}],
+        {id:'skillmaster',x:25,y:14},{id:'guard',x:22,y:26},{id:'forgemaster',x:28,y:20}],
   mobs:[],exits:[],labels:[]},
  forest:{name:'Whisperwood',ground:'.',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
  mountains:{name:'Frostpeak Mountains',ground:'s',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
@@ -717,6 +815,7 @@ function freshPlayer(){return{
   login:{last:'',streak:0},
   reached:{},        // region ids the player has set foot in (unlocks fast travel)
   bestiary:{},       // {creatureType:{dropKey:totalReceived}} — collection log
+  discovered:{},     // gearId -> true for fusion/unique weapons ever obtained (fusion silhouettes)
   grave:null,        // {map,x,y,items:[...],gold,left}  left = ms remaining
   stats:{kills:0,deaths:0,chopped:0,mined:0,bossKills:{},mobKills:{},legendaries:0,
          playMs:0,bestDrop:null,questsDone:0},
@@ -939,6 +1038,40 @@ function doCraft(recipeId,count){
   return made;
 }
 
+/* ---------------- fusion (special-weapon crafting at the Forgemaster) --------
+   Consumes the recipe's input weapons + a gold fee; the result keeps the highest
+   input rarity. A per-effect upgrade roll (scales with Crafting level) may bump an
+   effect to its "greater" variant. Discovery: an input's recipe stays a silhouette
+   until you've obtained ≥1 of its ingredients (tracked in P.discovered). */
+function markDiscovered(id){if(GEAR[id]&&(GEAR[id].fusion||GEAR[id].unique)){(P.discovered||(P.discovered={}))[id]=true;}}
+function doFuse(resultId){
+  const rec=FUSE_RECIPES[resultId];if(!rec)return false;
+  const res=GEAR[resultId];
+  if(lvl('attack')<res.req){toast('Requires Attack '+res.req,'bad');return false;}
+  if(P.gold<rec.gold){toast('Need '+rec.gold+'g to fuse.','bad');return false;}
+  /* locate one inventory piece per input (distinct slots) */
+  const idxs=[];
+  for(const inId of rec.in){
+    const i=P.inv.findIndex((s,k)=>s.gear&&s.gear.id===inId&&!idxs.includes(k));
+    if(i<0){toast('Missing '+GEAR[inId].name,'bad');return false;}
+    idxs.push(i);
+  }
+  let maxR=0;for(const i of idxs)maxR=Math.max(maxR,P.inv[i].gear.r||0);
+  idxs.sort((a,b)=>b-a).forEach(i=>P.inv.splice(i,1)); /* consume high→low so indices stay valid */
+  P.gold-=rec.gold;
+  const up=[],chance=fuseUpgradeChance();
+  for(const k of res.fx)if(Math.random()<chance)up.push(k);
+  const piece={id:resultId,r:maxR,up};
+  addGear(piece);markDiscovered(resultId);
+  gainXp('crafting',400*res.ftier); /* fusing is a major Crafting reward */
+  sfx('level');itemPopup(piece);
+  const ups=up.length?' — Greater '+up.map(k=>EFFECTS[k].name).join(' & '):'';
+  toast('⚔ Forged '+GEAR[resultId].name+'!'+ups,'gold');
+  P.stats.bestDrop=gearName(piece);
+  updateHUD();save();
+  return true;
+}
+
 /* ---------------- quests ---------------- */
 function questState(id){
   const st=P.quests[id];
@@ -1028,12 +1161,13 @@ function itemPopup(piece){
   const g=GEAR[piece.id];if(!g)return;
   const r=piece.r||0;
   $('itempopIcon').src=iconURL(piece.id);
-  const nm=$('itempopName');nm.textContent=gearName(piece);nm.style.color=RARITY[r].color;
-  $('itempopKind').textContent=(g.unique?'unique':(RARITY[r].name.trim()||'item')).toUpperCase();
+  const nm=$('itempopName');nm.textContent=gearName(piece);
+  nm.style.color=g.fusion&&r<3?g.color:RARITY[r].color;
+  $('itempopKind').textContent=(g.fusion?'special':g.unique?'unique':(RARITY[r].name.trim()||'item')).toUpperCase();
   const el=$('itempop');el.classList.remove('go','deluxe');void el.offsetWidth;el.classList.add('go');
-  if(r>=4){el.classList.add('deluxe');
+  if(r>=4||g.ftier>=3){el.classList.add('deluxe');
     const dim=$('popdim');dim.classList.add('go');setTimeout(()=>dim.classList.remove('go'),1900);
-    spawnParticles(P.px+16,P.py,RARITY[r].color,22,2);}
+    spawnParticles(P.px+16,P.py,g.fusion?g.color:RARITY[r].color,22,2);}
   sfx('rare');
 }
 let xpBarTimer=null,xpSkill='woodcutting';
@@ -1635,6 +1769,7 @@ const NPC_LOOK={
   elder:      {body:'#6a6079',hair:'#dcd7c8',beard:'#dcd7c8',robe:1,prop:'staff',propC:'#cbd0d8'},
   guard:      {body:'#5c7a4a',hat:'#b8c4cf',helm:1,prop:'spear'},
   skillmaster:{body:'#b0862c',cape:'#9b5fb0',hair:'#5a4630',robe:1,trim:'#e8c451'},
+  forgemaster:{body:'#4a4038',hair:'#6a2a1a',skin:'#c98b6e',prop:'hammer',apron:1,trim:'#f0c419'},
 };
 function mkHumanoid(o,pose){
   const A=pose.a||[0,0],B=pose.b||[0,0];
@@ -1786,7 +1921,14 @@ function combatMode(){ // 'melee'|'ranged'|'magic'
   if(!w)return'melee';
   return w.line==='r'?'ranged':w.line==='g'?'magic':'melee';
 }
-function weaponRange(){const m=combatMode();return m==='melee'?1:m==='ranged'?4:5;}
+function weaponRange(){
+  const m=combatMode();
+  if(m!=='melee')return m==='ranged'?4:5;
+  let r=1; /* the 'reach' effect extends melee range */
+  for(const e of weaponEffects(P.gear.weapon))
+    if(e.k==='reach')r+=(e.greater?EFFECTS.reach.g:EFFECTS.reach.mag).range;
+  return r;
+}
 function weaponSpeed(){
   const w=P.gear.weapon&&GEAR[P.gear.weapon.id];
   let spd=w?w.spd:2400;
@@ -1925,9 +2067,10 @@ function pickupDrop(d){
   for(const it of d.items){
     if(it.gear){
       if(addGear(it.gear)){
-        const nm=gearName(it.gear),r=it.gear.r||0;
-        bestiaryCredit(it.src,it.gear.id.slice(0,2)==='u_'?it.gear.id:'gear',1);
-        if(r>=3){itemPopup(it.gear);P.stats.bestDrop=nm;if(r>=4)P.stats.legendaries++;}
+        const nm=gearName(it.gear),r=it.gear.r||0,g0=GEAR[it.gear.id],special=g0&&(g0.fusion||g0.unique);
+        bestiaryCredit(it.src,special?it.gear.id:'gear',1);
+        if(special)markDiscovered(it.gear.id);
+        if(r>=3||special){itemPopup(it.gear);P.stats.bestDrop=nm;if(r>=4)P.stats.legendaries++;}
         else{toast('+ '+nm,r>=2?'gold':'drop');sfx('loot');}
       }else{remain.push(it);toast('Inventory full','bad');}
     }else{
@@ -1956,9 +2099,10 @@ function pickupOne(d,spec){
     const it=spec;
     if(it.gear){
       if(!addGear(it.gear))return 'full';
-      const nm=gearName(it.gear),r=it.gear.r||0;
-      bestiaryCredit(it.src,it.gear.id.slice(0,2)==='u_'?it.gear.id:'gear',1);
-      if(r>=3){itemPopup(it.gear);P.stats.bestDrop=nm;if(r>=4)P.stats.legendaries++;}
+      const nm=gearName(it.gear),r=it.gear.r||0,g0=GEAR[it.gear.id],special=g0&&(g0.fusion||g0.unique);
+      bestiaryCredit(it.src,special?it.gear.id:'gear',1);
+      if(special)markDiscovered(it.gear.id);
+      if(r>=3||special){itemPopup(it.gear);P.stats.bestDrop=nm;if(r>=4)P.stats.legendaries++;}
       else{toast('+ '+nm,r>=2?'gold':'drop');sfx('loot');}
     }else{
       if(!addItem(it.id,it.qty))return 'full';
@@ -1992,6 +2136,9 @@ function rollLoot(mob){
   }
   /* boss signature drop: ~14% chance to also drop its unique (rarity 5) */
   if(d.unique&&GEAR[d.unique]&&Math.random()<0.14)out.items.push({gear:{id:d.unique,r:5}});
+  /* fusion ingredient: the source creature rarely drops its tier-1 special */
+  const fd=MOB_FUSION_DROP[mob.type];
+  if(fd&&GEAR[fd]&&Math.random()<FUSION_DROP_CHANCE)out.items.push({gear:{id:fd,r:rollRarity(d.rarityBoost||0)}});
   return out;
 }
 
@@ -2085,9 +2232,18 @@ function doAction(){
       P.atkT=T;
       const md=MOBS[t.type];
       const tri=triangle(mode,md.style);
-      const chance=hitChance(atk.acc*(tri>1?1.07:tri<1?0.93:1), md.def*2+8);
+      const fx=mode==='melee'?weaponEffects(P.gear.weapon):[]; /* fusion on-hit effects */
+      /* crush: ignore part of the target's armour */
+      let defRoll=md.def*2+8;
+      for(const e of fx)if(e.k==='crush')defRoll*=(1-(e.greater?EFFECTS.crush.g:EFFECTS.crush.mag).pct);
+      const chance=hitChance(atk.acc*(tri>1?1.07:tri<1?0.93:1), defRoll);
       let dmg=0;
-      if(Math.random()<chance)dmg=Math.max(1,Math.round(rand(Math.ceil(atk.maxHit*0.35),atk.maxHit)*tri));
+      if(Math.random()<chance){
+        dmg=Math.max(1,Math.round(rand(Math.ceil(atk.maxHit*0.35),atk.maxHit)*tri));
+        /* execute: extra damage to wounded foes */
+        for(const e of fx)if(e.k==='execute'){const em=e.greater?EFFECTS.execute.g:EFFECTS.execute.mag;
+          if(t.hp/md.hp<=em.hp)dmg=Math.round(dmg*(1+em.pct));}
+      }
       if(mode==='ranged'){shoot(P.px+16,P.py+8,t.px+16,t.py+8,'#d8d5c8');sfx('shoot');}
       else if(mode==='magic'){shoot(P.px+16,P.py+8,t.px+16,t.py+8,'#b06fd1');sfx('zap');}
       else sfx('hit');
@@ -2098,14 +2254,86 @@ function doAction(){
         spawnParticles(t.px+16,t.py+8,mode==='magic'?'#c9a5ff':mode==='ranged'?'#e8e2c8':'#ffd27a',big?9:5,big?1.6:1);
         gainXp(trainSkill(),dmg*4);
         if(mode!=='melee')dailyEvent('stylehit',null,1);
+        if(fx.length)applyOnHit(t,dmg,fx);
       }
+      if(fx.length)slashSwing(t,fx,atk); /* slashwave counts every swing, hit or miss */
       if(t.hp<=0)killMob(t);
     }
   }
 }
+/* ---------------- fusion weapon on-hit effects (§9) ---------------- */
+const DOT_INTERVAL=600; /* ms between damage-over-time ticks */
+function addDot(m,k,dmg,ticks){
+  m.dots=m.dots||[];
+  const ex=m.dots.find(d=>d.k===k);
+  if(ex){ex.dmg=Math.max(ex.dmg,dmg);ex.ticks=Math.max(ex.ticks,ticks);}
+  else m.dots.push({k,dmg,ticks,next:T+DOT_INTERVAL,skill:trainSkill()});
+}
+function tickDots(m){
+  if(!m.dots||!m.dots.length)return;
+  for(let i=m.dots.length-1;i>=0;i--){
+    const dt=m.dots[i];if(T<dt.next)continue;
+    dt.next=T+DOT_INTERVAL;dt.ticks--;
+    m.hp-=dt.dmg;
+    floater(m.px+16,m.py-6,'-'+dt.dmg,EFFECTS[dt.k].color,9);
+    spawnParticles(m.px+16,m.py+6,EFFECTS[dt.k].color,3,0.7);
+    gainXp(dt.skill,dt.dmg*2);
+    if(dt.ticks<=0)m.dots.splice(i,1);
+    if(m.hp<=0){killMob(m);return;}
+  }
+}
+function knockbackMob(m,tiles){
+  if(m.moving)return;
+  const dx=Math.sign(m.tx-P.tx),dy=Math.sign(m.ty-P.ty);
+  if(!dx&&!dy)return;
+  let nx=m.tx,ny=m.ty;
+  for(let i=0;i<tiles;i++){const tx=nx+dx,ty=ny+dy;
+    if(walkable(P.map,tx,ty)&&!mobAt(P.map,tx,ty)&&!(tx===P.tx&&ty===P.ty)){nx=tx;ny=ty;}else break;}
+  if(nx!==m.tx||ny!==m.ty){m.tx=nx;m.ty=ny;m.px=nx*TILE;m.py=ny*TILE;}
+}
+function cleaveHit(primary,dmg,pct){ /* splash to every other foe around the player */
+  const extra=Math.max(1,Math.round(dmg*pct));
+  for(const m of world[P.map].mobs){
+    if(m===primary||!m.alive)continue;
+    if(distTiles(m.tx,m.ty,P.tx,P.ty)<=1){
+      m.hp-=extra;m.aggro=true;floater(m.px+16,m.py-6,'-'+extra,'#e8c451',9);
+      if(m.hp<=0)killMob(m);
+    }
+  }
+}
+function pierceHit(primary,dmg,range){ /* run through foes in a line beyond the target */
+  const dx=Math.sign(primary.tx-P.tx),dy=Math.sign(primary.ty-P.ty);
+  if(!dx&&!dy)return;
+  const extra=Math.max(1,Math.round(dmg*0.6));
+  for(let i=1;i<=range;i++){const m=mobAt(P.map,P.tx+dx*i,P.ty+dy*i);
+    if(m&&m!==primary&&m.alive){m.hp-=extra;m.aggro=true;floater(m.px+16,m.py-6,'-'+extra,'#8fe0ff',9);if(m.hp<=0)killMob(m);}}
+}
+function slashSwing(t,fx,atk){ /* every Nth swing looses a blade wave along facing */
+  for(const e of fx)if(e.k==='slashwave'){
+    const sm=e.greater?EFFECTS.slashwave.g:EFFECTS.slashwave.mag;
+    P.swing=(P.swing||0)+1;
+    if(P.swing%sm.every!==0)continue;
+    const wave=Math.max(1,Math.round(atk.maxHit*sm.pct));
+    shoot(P.px+16,P.py+8,P.px+16+P.facing*90,P.py+8,'#f0c419');
+    for(let i=1;i<=3;i++){const m=mobAt(P.map,P.tx+P.facing*i,P.ty);
+      if(m&&m.alive){m.hp-=wave;m.aggro=true;floater(m.px+16,m.py-6,'-'+wave,'#f0c419',10);if(m.hp<=0)killMob(m);}}
+  }
+}
+function applyOnHit(t,dmg,fx){
+  const alive=t.hp>0;
+  for(const e of fx){
+    const k=e.k,mg=e.greater?EFFECTS[k].g:EFFECTS[k].mag;
+    if(EFFECTS[k].dot){if(alive)addDot(t,k,mg.dmg,mg.ticks);}
+    else if(k==='lifesteal'){const heal=Math.max(1,Math.round(dmg*mg.pct));
+      if(P.hp<maxHp()){P.hp=Math.min(maxHp(),P.hp+heal);floater(P.px+8,P.py-20,'+'+heal,'#c98bff',9);updateHUD();}}
+    else if(k==='knockback'){if(alive)knockbackMob(t,mg.tiles);}
+    else if(k==='cleave')cleaveHit(t,dmg,mg.pct);
+    else if(k==='pierce')pierceHit(t,dmg,mg.range);
+  }
+}
 function killMob(m){
   const d=MOBS[m.type];
-  m.alive=false;m.aggro=false;m.respawnAt=T+(d.respawn||9000);
+  m.alive=false;m.aggro=false;m.dots=[];m.respawnAt=T+(d.respawn||9000);
   gainXp(trainSkill(),d.xp);
   const loot=rollLoot(m);loot.src=m.type; /* tag for the bestiary */
   spawnDrop(P.map,m.tx,m.ty,loot);
@@ -2118,8 +2346,12 @@ function killMob(m){
     levelFlash(d.name+' defeated!');shake(6);
   }
   questEvent('kill',m.type,P.map);
-  const next=nearestMob(m.type,P.tx,P.ty);
-  if(next)setFight(next);else P.action=null;
+  /* only auto-chain to the next foe when we were actually fighting — an off-screen
+     DoT/cleave/pierce kill must not hijack gathering or walking */
+  if(P.action&&P.action.kind==='fight'){
+    const next=nearestMob(m.type,P.tx,P.ty);
+    if(next)setFight(next);else P.action=null;
+  }
   save();
 }
 function hurtPlayer(dmg){
@@ -2157,9 +2389,11 @@ function updateMobs(){
   for(const m of W.mobs){
     const d=MOBS[m.type];
     if(!m.alive){
-      if(T>=m.respawnAt){m.alive=true;m.hp=d.hp;m.tx=m.hx;m.ty=m.hy;m.px=m.tx*TILE;m.py=m.ty*TILE;m.moving=null;}
+      if(T>=m.respawnAt){m.alive=true;m.hp=d.hp;m.dots=[];m.tx=m.hx;m.ty=m.hy;m.px=m.tx*TILE;m.py=m.ty*TILE;m.moving=null;}
       continue;
     }
+    tickDots(m);
+    if(!m.alive)continue; /* a DoT tick may have killed it */
     stepEntity(m);
     if(m.moving)continue;
     if(d.aggro&&!m.aggro&&distTiles(m.tx,m.ty,P.tx,P.ty)<=4)m.aggro=true;
@@ -2420,6 +2654,9 @@ function draw(){
         const any=SKILL_ORDER.some(s=>lvl(s)>=MAX_LVL&&!P.capes.includes('cape_'+s));
         if(any)mark='!';
       }
+      if(n.role==='fuse'){
+        if(P.inv.some(s=>s.gear&&GEAR[s.gear.id]&&GEAR[s.gear.id].fusion))mark='!';
+      }
       if(mark){
         const nbob=Math.sin(T/300)*2;
         ctx.font='bold 12px monospace';ctx.textAlign='center';
@@ -2439,6 +2676,29 @@ function draw(){
           ctx.fillStyle='#000000aa';ctx.fillRect(P.px+4,P.py-8,24,4);
           ctx.fillStyle='#e8b64c';ctx.fillRect(P.px+5,P.py-7,22*Math.min(1,P.action.prog/speed),2);}
       }
+    }
+  }
+  /* interaction highlight: a soft light-yellow outline around whatever the
+     player is currently acting on — a resource, a mob, or an NPC */
+  if(P.action){
+    const tgt=findTarget();
+    let bx=null;
+    if(tgt){
+      if(P.action.kind==='gather'&&tgt.alive){
+        const tree=RES[tgt.type]&&RES[tgt.type].skill==='woodcutting';
+        const sway=Math.sin(T/900+tgt.x*1.3)*0.8;
+        bx=tree?[tgt.x*TILE+sway,tgt.y*TILE-16,32,48]:[tgt.x*TILE,tgt.y*TILE,32,32];
+      }else if(P.action.kind==='fight'&&tgt.alive){
+        bx=MOBS[tgt.type].boss?[tgt.px-16,tgt.py-32,64,64]:[tgt.px,tgt.py,32,32];
+      }else if(P.action.kind==='talk'){
+        bx=[tgt.px,tgt.py-12,32,44];
+      }
+    }
+    if(bx){
+      const a=0.55+0.25*Math.sin(T/220); /* gentle pulse */
+      ctx.strokeStyle='rgba(240,226,140,'+a.toFixed(2)+')';
+      ctx.lineWidth=1.5;
+      ctx.strokeRect(bx[0]-1,bx[1]-1,bx[2]+2,bx[3]+2);
     }
   }
   /* place + street labels, drawn above the buildings for readability */
@@ -2593,7 +2853,8 @@ function invInfoHtml(i){
     return '<b style="color:'+gearColor(s.gear)+'">'+esc(gearName(s.gear))+'</b><br>'+
       esc(stats)+'<br><span class="hint">'+SKILLS[g.reqSkill].name+' '+g.req+
       (g.spd?' · speed '+(g.spd/1000)+'s':'')+ (g.ammo?' · uses '+ITEMS[g.ammo].name:'')+'</span>'+
-      (g.unique&&g.perkDesc?'<br><span style="color:#ff8a3a">✦ '+esc(g.perkDesc)+'</span>':'')+'<br>'+
+      (g.unique&&g.perkDesc?'<br><span style="color:#ff8a3a">✦ '+esc(g.perkDesc)+'</span>':'')+
+      (g.fusion?weaponEffects(s.gear).map(e=>'<br><span style="color:'+EFFECTS[e.k].color+'">✦ '+esc(effDesc(e.k,e.greater))+'</span>').join(''):'')+'<br>'+
       (chk.ok?'<button class="btn small" data-act="equip" data-arg="'+i+'">Equip</button>'
              :'<span class="tag locked">'+esc(chk.why)+'</span>')+
       ' <button class="btn small danger" data-act="drop" data-arg="'+i+'">Drop</button>';
@@ -2622,6 +2883,12 @@ function openEquipment(){
   h+='<div class="hint">Tap a piece to unequip · HP +'+(maxHp()-10)+' from gear</div>';
   h+='<div class="statline">acc +'+Math.round(b.acc)+' · pow +'+Math.round(b.pow)+
      ' · def +'+Math.round(b.def)+(b.rpow?' · ranged +'+b.rpow:'')+(b.mpow?' · magic +'+b.mpow:'')+'</div>';
+  const wpn=P.gear.weapon;
+  if(wpn&&GEAR[wpn.id]&&GEAR[wpn.id].fusion){
+    h+='<div class="sect">Weapon effects</div>';
+    for(const e of weaponEffects(wpn))
+      h+='<div class="qrow"><span style="color:'+EFFECTS[e.k].color+'">✦ '+esc(effDesc(e.k,e.greater))+'</span><span class="hint">'+esc(EFFECTS[e.k].desc)+'</span></div>';
+  }
   if(combatMode()==='melee'){
     h+='<div class="sect">Melee style — trains the chosen skill</div><div class="stylerow">';
     for(const[st,label,sk]of[['accurate','🎯 Accurate','attack'],['aggressive','⚔️ Aggressive','strength'],['defensive','🛡️ Defensive','defence']])
@@ -2883,6 +3150,44 @@ function openCraft(){
   openPanel('Forge — Crafting '+lvl('crafting'),h);
 }
 
+/* ---------------- Forgemaster Hilde (special-weapon fusion) ---------------- */
+function fuseDot(k){return '<span title="'+esc(effDesc(k,false))+'" style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+EFFECTS[k].color+';margin-right:2px"></span>';}
+function openFuse(){
+  const upPct=Math.round(fuseUpgradeChance()*100);
+  let h='<div class="hint">Fuse special weapons into stronger ones — 10 → 6 → 3 → 1. Inputs are consumed; the result keeps the highest input rarity. Crafting '+lvl('crafting')+' → '+upPct+'% chance to upgrade each effect to its Greater form.</div>';
+  let discoveredCount=0,total=0;
+  for(let tier=2;tier<=4;tier++){
+    const ids=FUSE_ORDER.filter(id=>GEAR[id].ftier===tier);
+    h+='<div class="sect">Tier '+tier+(tier===4?' — the Godsword':'')+'</div>';
+    for(const id of ids){
+      total++;
+      const rec=FUSE_RECIPES[id],g=GEAR[id];
+      const discovered=rec.in.some(inId=>P.discovered&&P.discovered[inId]);
+      if(discovered)discoveredCount++;
+      if(!discovered){
+        h+='<div class="qrow dim"><span><b style="color:var(--dim)">?</b> &nbsp;???</span><span class="tag locked">undiscovered</span></div>';
+        continue;
+      }
+      const inStr=rec.in.map(inId=>{const have=P.inv.some(s=>s.gear&&s.gear.id===inId);
+        return '<span style="color:'+(have?'var(--dim)':'#f0b0a5')+'">'+esc(GEAR[inId].name)+(have?'':' ✗')+'</span>';}).join(' + ');
+      const fxStr=g.fx.map(k=>fuseDot(k)+EFFECTS[k].name).join(' &nbsp;');
+      const need=[];const idxs=[];
+      for(const inId of rec.in){const i=P.inv.findIndex((s,k)=>s.gear&&s.gear.id===inId&&!idxs.includes(k));
+        if(i<0)need.push(inId);else idxs.push(i);}
+      const haveAll=need.length===0,atkOk=lvl('attack')>=g.req,goldOk=P.gold>=rec.gold;
+      const can=haveAll&&atkOk&&goldOk;
+      h+='<div class="qrow"><span><img class="mini" src="'+iconURL(id)+'" alt=""> '+esc(g.name)+
+        '<br><span class="hint">'+inStr+' &nbsp;+ '+rec.gold+'g · Atk '+g.req+'</span>'+
+        '<br><span class="hint">'+fxStr+'</span></span>'+
+        (can?'<button class="btn small" data-act="fuse" data-arg="'+id+'">Fuse</button>'
+            :!atkOk?'<span class="tag locked">Atk '+g.req+'</span>'
+            :!haveAll?'<span class="tag locked">need parts</span>'
+            :'<span class="tag locked">'+rec.gold+'g</span>')+'</div>';
+    }
+  }
+  openPanel('Forgemaster — '+discoveredCount+'/'+total+' known · '+P.gold+'g',h);
+}
+
 /* ---------------- Master Aldric (capes) ---------------- */
 function openCapes(){
   let h='<div class="sect">Capes of Accomplishment — 5,000g each at level 50</div>';
@@ -2986,6 +3291,7 @@ function openDialog(npc){
   if(npc.role==='shop')addOpt(opts,'⚒ Trade',()=>{closeDialog();openShop();});
   if(npc.role==='shop')addOpt(opts,'🔨 Craft',()=>{closeDialog();openCraft();});
   if(npc.role==='capes')addOpt(opts,'🎽 Capes of Accomplishment',()=>{closeDialog();openCapes();});
+  if(npc.role==='fuse')addOpt(opts,'⚔ Fuse special weapons',()=>{closeDialog();openFuse();});
   addOpt(opts,'Farewell.',closeDialog);
   $('dialog').classList.add('open');
 }
@@ -3081,6 +3387,7 @@ $('pbody').addEventListener('click',ev=>{
     const n=cnt==='all'?craftMax(RECIPES[rid]):+cnt;
     if(n>0)doCraft(rid,n);openCraft();
   }
+  else if(act==='fuse'){doFuse(arg);openFuse();}
   else if(act==='sell'){const s=P.inv[+arg];if(s&&ITEMS[s.id]){const g=ITEMS[s.id].sell*s.qty;P.inv.splice(+arg,1);addGold(g);sfx('coin');toast('Sold for '+g+'g','gold');openShop();}}
   else if(act==='sellgear'){const s=P.inv[+arg];if(s&&s.gear){const g=gearSellValue(s.gear);P.inv.splice(+arg,1);addGold(g);sfx('coin');toast('Sold '+gearName(s.gear)+' for '+g+'g','gold');openShop();}}
   else if(act==='bulksell'){
@@ -3316,9 +3623,10 @@ function boot(){
 
 /* ---------------- debug handle ---------------- */
 window.EB={world,MAPS,ITEMS,TOOLS,GEAR,MOBS,CAPES,RARITY,QUESTS,RES,RECIPES,
+ FUSIONS,FUSE_RECIPES,FUSE_ORDER,EFFECTS,MOB_FUSION_DROP,weaponEffects,
  update,camera,setGather,setFight,setLoot,openBank,openShop,openInventory,openEquipment,
  openSkills,openQuests,openQuestBoard,openSettings,openDialog,openMonument,openCapes,openBestiary,
- openCraft,doCraft,craftMax,craftReq,
+ openCraft,doCraft,craftMax,craftReq,openFuse,doFuse,
  addItem,addGear,invCount,equipGear,unequip,gearBonus,playerAttack,rollLoot,rollRarity,
  spawnDrop,pickupDrop,pickupOne,openFloorMenu,killMob,eatFood,save,load,serialize,applySave,migrateV1,
  hurtPlayer,die,maxHp,lvlFor,totalLevel,questState,freshPlayer,rebuildPlayerSprite,

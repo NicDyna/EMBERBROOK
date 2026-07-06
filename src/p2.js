@@ -157,6 +157,7 @@ const NPCS={
     "Whisperwood, then the frozen peaks, the plains, and the deep desert. Few return.",
     "The real treasures lie in the dungeons. So do the things that guard them."]},
   skillmaster:{name:'Master Aldric',role:'capes'},
+  forgemaster:{name:'Forgemaster Hilde',role:'fuse'},
 };
 
 /* ---------------- quests (7, linear) ---------------- */
@@ -217,7 +218,7 @@ const MAPS={
    {x:30,y:23,w:3,d:3,type:'house_a'},
    {x:24,y:26,w:3,d:3,type:'tower', label:'BÜCHELTURM'}],
   npcs:[{id:'banker',x:9,y:12},{id:'smith',x:30,y:19},{id:'elder',x:14,y:20},
-        {id:'skillmaster',x:25,y:14},{id:'guard',x:22,y:26}],
+        {id:'skillmaster',x:25,y:14},{id:'guard',x:22,y:26},{id:'forgemaster',x:28,y:20}],
   mobs:[],exits:[],labels:[]},
  forest:{name:'Whisperwood',ground:'.',rows:[],npcs:[],mobs:[],exits:[],labels:[]},
  mountains:{name:'Frostpeak Mountains',ground:'s',rows:[],npcs:[],mobs:[],exits:[],labels:[]},

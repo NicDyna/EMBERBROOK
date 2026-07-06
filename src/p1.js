@@ -126,6 +126,103 @@ const UNIQUES={
     GEAR[id]=g;
   }
 })();
+/* ============================================================
+   FUSION WEAPONS (Phase 4) — special melee weapons layered on top of the
+   bronze→rune tiers. A Terraria-style tree: 10 tier-1 specials (each a rare
+   drop from a creature) fuse 10→6→3→1 into the endgame Godsword. Each carries
+   fixed on-hit EFFECTS; the Crafting-skill upgrade roll at fuse time may bump an
+   effect to its "greater" variant. Melee-only for now (DESIGN-v3 §4).
+   ============================================================ */
+/* the 11 combat effect keywords (§9). `mag` = base, `g` = greater variant.
+   dot:true → damage-over-time applied to the mob and ticked in updateMobs. */
+const EFFECTS={
+  burn:     {name:'Burn',     dot:true, color:'#ff8a3a', mag:{dmg:3,ticks:3},   g:{dmg:5,ticks:4},   desc:'Ignites the foe'},
+  poison:   {name:'Poison',   dot:true, color:'#7fd17f', mag:{dmg:2,ticks:5},   g:{dmg:4,ticks:5},   desc:'Poisons over time'},
+  bleed:    {name:'Bleed',    dot:true, color:'#d9534f', mag:{dmg:4,ticks:3},   g:{dmg:6,ticks:4},   desc:'Deep bleeding wounds'},
+  cleave:   {name:'Cleave',   color:'#e8c451', mag:{pct:0.6},         g:{pct:1.0},         desc:'Strikes every foe around you'},
+  pierce:   {name:'Pierce',   color:'#8fe0ff', mag:{range:2},         g:{range:3},         desc:'Runs foes through in a line'},
+  knockback:{name:'Knockback',color:'#cfc9bd', mag:{tiles:1},         g:{tiles:2},         desc:'Hurls the target back'},
+  reach:    {name:'Reach',    color:'#b9c6d4', mag:{range:1},         g:{range:2},         desc:'Extends your attack range'},
+  crush:    {name:'Crush',    color:'#a08c78', mag:{pct:0.25},        g:{pct:0.5},         desc:'Ignores part of armour'},
+  execute:  {name:'Execute',  color:'#ff6a5a', mag:{pct:0.5,hp:0.25}, g:{pct:1.0,hp:0.30}, desc:'Devastates wounded foes'},
+  lifesteal:{name:'Lifesteal',color:'#c98bff', mag:{pct:0.10},        g:{pct:0.20},        desc:'Heals you as you strike'},
+  slashwave:{name:'Slash Wave',color:'#f0c419',mag:{every:3,pct:0.6}, g:{every:2,pct:0.8}, desc:'Looses a blade of force'},
+};
+function effDesc(k,greater){ /* human-readable magnitude for the current variant */
+  const e=EFFECTS[k],m=greater?e.g:e.mag,gp=greater?'Greater ':'';
+  if(e.dot)return gp+e.name+' ('+m.dmg+' dmg × '+m.ticks+')';
+  if(k==='cleave')return gp+e.name+' ('+Math.round(m.pct*100)+'% splash)';
+  if(k==='pierce')return gp+e.name+' (line of '+m.range+')';
+  if(k==='knockback')return gp+e.name+' (+'+m.tiles+' tile)';
+  if(k==='reach')return gp+e.name+' (+'+m.range+' range)';
+  if(k==='crush')return gp+e.name+' (−'+Math.round(m.pct*100)+'% armour)';
+  if(k==='execute')return gp+e.name+' (+'+Math.round(m.pct*100)+'% <'+Math.round(m.hp*100)+'% HP)';
+  if(k==='lifesteal')return gp+e.name+' ('+Math.round(m.pct*100)+'% heal)';
+  if(k==='slashwave')return gp+e.name+' (every '+m.every+' hits)';
+  return gp+e.name;
+}
+/* the 20-weapon tree. tier 1 = drops; 2/3/4 = fused. All melee weapons. */
+const FUSIONS={
+  /* --- tier 1: 10 signature drops (drop-source in `drop`) --- */
+  fw_venomfang:  {name:'Venomfang Dirk', tier:1,req:40,color:'#7ad17f',stats:{acc:30,pow:22},fx:['poison'],   drop:'spider'},
+  fw_ripper:     {name:'Ripper Blade',   tier:1,req:40,color:'#d9534f',stats:{acc:29,pow:23},fx:['bleed'],    drop:'bandit'},
+  fw_boarcleaver:{name:'Boar Cleaver',   tier:1,req:40,color:'#c98b50',stats:{acc:28,pow:24},fx:['cleave'],   drop:'boar'},
+  fw_frostbrand: {name:'Frostbrand',     tier:1,req:41,color:'#8fe0ff',stats:{acc:30,pow:22},fx:['burn'],     drop:'frost_wolf'},
+  fw_piercer:    {name:'Shardpiercer',   tier:1,req:41,color:'#bfe0ff',stats:{acc:31,pow:22},fx:['pierce'],   drop:'ice_sprite'},
+  fw_tremor:     {name:'Tremor Maul',    tier:1,req:42,color:'#a08c78',stats:{acc:28,pow:25},fx:['knockback'],drop:'snow_troll'},
+  fw_glaive:     {name:"Reachglaive",    tier:1,req:42,color:'#d0a83a',stats:{acc:30,pow:23},fx:['reach'],    drop:'steppe_lion'},
+  fw_sunderer:   {name:'Sunderer',       tier:1,req:43,color:'#9fb0bd',stats:{acc:29,pow:24},fx:['crush'],    drop:'nomad'},
+  fw_reaperedge: {name:"Reaper's Edge",  tier:1,req:43,color:'#ff6a5a',stats:{acc:31,pow:23},fx:['execute'],  drop:'scorpion'},
+  fw_leechblade: {name:'Leechblade',     tier:1,req:44,color:'#c98bff',stats:{acc:30,pow:23},fx:['lifesteal'],drop:'sand_wraith'},
+  /* --- tier 2: 6 weapons (2 inputs, 5,000g) --- */
+  fw_plaguecleaver:{name:'Plaguecleaver',tier:2,req:45,color:'#8fd17f',stats:{acc:34,pow:28},fx:['poison','cleave']},
+  fw_gorehowl:     {name:'Gorehowl',     tier:2,req:45,color:'#d96a53',stats:{acc:33,pow:29},fx:['bleed','knockback']},
+  fw_flamereach:   {name:'Flamereach',   tier:2,req:45,color:'#ffb04a',stats:{acc:35,pow:27},fx:['burn','reach']},
+  fw_impaler:      {name:'Impaler',      tier:2,req:45,color:'#9fd0e0',stats:{acc:34,pow:28},fx:['pierce','crush']},
+  fw_soulrender:   {name:'Soulrender',   tier:2,req:45,color:'#d08bff',stats:{acc:34,pow:28},fx:['execute','lifesteal']},
+  fw_wolfsbane:    {name:'Wolfsbane',    tier:2,req:45,color:'#9ad9a0',stats:{acc:33,pow:29},fx:['burn','poison']},
+  /* --- tier 3: 3 weapons (2 inputs, 25,000g) --- */
+  fw_doomblade:    {name:'Doomblade',    tier:3,req:48,color:'#c0504a',stats:{acc:40,pow:34},fx:['poison','cleave','bleed']},
+  fw_worldpiercer: {name:'Worldpiercer', tier:3,req:48,color:'#7fbfe0',stats:{acc:40,pow:34},fx:['pierce','crush','knockback']},
+  fw_reaperofsouls:{name:'Reaper of Souls',tier:3,req:48,color:'#b06fd1',stats:{acc:41,pow:35},fx:['execute','lifesteal','burn']},
+  /* --- tier 4: the Godsword (3 inputs, 100,000g) --- */
+  fw_godsword:     {name:'Godsword of Emberbrook',tier:4,req:50,color:'#f0c419',stats:{acc:48,pow:42},fx:['cleave','execute','lifesteal','slashwave']},
+};
+(function buildFusions(){
+  for(const id in FUSIONS){const f=FUSIONS[id];
+    GEAR[id]={id,name:f.name,line:'m',tier:6,slot:'weapon',req:f.req,reqSkill:'attack',
+      color:f.color,stats:{...f.stats},spd:2400,fusion:true,ftier:f.tier,fx:f.fx};
+  }
+})();
+/* recipes: result → inputs + gold fee. Gated on Attack level (result.req). */
+const FUSE_RECIPES={
+  fw_plaguecleaver:{in:['fw_venomfang','fw_boarcleaver'],gold:5000},
+  fw_gorehowl:     {in:['fw_ripper','fw_tremor'],gold:5000},
+  fw_flamereach:   {in:['fw_frostbrand','fw_glaive'],gold:5000},
+  fw_impaler:      {in:['fw_piercer','fw_sunderer'],gold:5000},
+  fw_soulrender:   {in:['fw_reaperedge','fw_leechblade'],gold:5000},
+  fw_wolfsbane:    {in:['fw_frostbrand','fw_venomfang'],gold:5000},
+  fw_doomblade:    {in:['fw_plaguecleaver','fw_gorehowl'],gold:25000},
+  fw_worldpiercer: {in:['fw_flamereach','fw_impaler'],gold:25000},
+  fw_reaperofsouls:{in:['fw_soulrender','fw_wolfsbane'],gold:25000},
+  fw_godsword:     {in:['fw_doomblade','fw_worldpiercer','fw_reaperofsouls'],gold:100000},
+};
+const FUSE_ORDER=Object.keys(FUSE_RECIPES);
+/* creature → the tier-1 fusion weapon it can rarely drop (see rollLoot) */
+const MOB_FUSION_DROP={};
+for(const _id in FUSIONS)if(FUSIONS[_id].drop)MOB_FUSION_DROP[FUSIONS[_id].drop]=_id;
+const FUSION_DROP_CHANCE=0.05; /* per-kill chance for the source creature */
+/* effect list for an owned weapon piece, applying its per-instance greater
+   upgrades (piece.up = array of upgraded effect keys, rolled at fuse time). */
+function weaponEffects(piece){
+  if(!piece)return[];
+  const g=GEAR[piece.id];if(!g||!g.fx)return[];
+  const up=piece.up||[];
+  return g.fx.map(k=>({k,greater:up.includes(k)}));
+}
+/* upgrade chance scales with Crafting level: ~5% @1 → ~60% @50 */
+function fuseUpgradeChance(){return 0.05+(clamp(lvl('crafting'),1,MAX_LVL)-1)/(MAX_LVL-1)*0.55;}
+
 /* effective stats of an owned gear piece {id, r} */
 function gearStats(piece){
   const g=GEAR[piece.id]; if(!g)return{};

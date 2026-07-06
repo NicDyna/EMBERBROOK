@@ -270,11 +270,56 @@ setTimeout(()=>{
   const safeY=avgY('mountains',['Y','I']),deepY=avgY('mountains',['A','e','Z']);
   ok(deepY>safeY,'high-tier nodes sit deeper south than safe nodes: deep '+deepY.toFixed(1)+' > safe '+safeY.toFixed(1));
 
+  /* ---------- Phase 4: fusion weapon data ---------- */
+  ok(Object.keys(EB.FUSIONS).length===20,'20 fusion weapons defined');
+  ok(Object.keys(EB.FUSE_RECIPES).length===10,'10 fusion recipes (6+3+1)');
+  ok(Object.keys(EB.MOB_FUSION_DROP).length===10,'10 creatures drop a tier-1 ingredient');
+  ok(EB.GEAR.fw_godsword&&EB.GEAR.fw_godsword.fusion&&EB.GEAR.fw_godsword.req===50,'Godsword registered in GEAR');
+  ok(EB.MOB_FUSION_DROP.spider==='fw_venomfang','spider maps to its tier-1 drop');
+
+  /* ---------- Phase 4: fusion consumes inputs, keeps rarity, gives crafting xp ---------- */
+  EB.P.inv=[];EB.P.gold=10000;EB.P.xp.attack=w.eval('xpAt(45)');EB.P.xp.crafting=0;
+  EB.addGear({id:'fw_venomfang',r:2});  // rare
+  EB.addGear({id:'fw_boarcleaver',r:0}); // common
+  ok(EB.doFuse('fw_plaguecleaver'),'fused Plaguecleaver from two tier-1 weapons');
+  const fused=EB.P.inv.find(s=>s.gear&&s.gear.id==='fw_plaguecleaver');
+  ok(fused&&fused.gear.r===2,'result kept the highest input rarity (rare)');
+  ok(!EB.P.inv.some(s=>s.gear&&(s.gear.id==='fw_venomfang'||s.gear.id==='fw_boarcleaver')),'both inputs consumed');
+  ok(EB.P.gold===5000,'5,000g fee deducted');
+  ok(EB.P.xp.crafting>0,'fusing gave crafting xp: '+EB.P.xp.crafting);
+  ok(EB.P.discovered&&EB.P.discovered.fw_plaguecleaver,'fused result marked discovered');
+
+  /* ---------- Phase 4: fusion gates (attack level + gold) ---------- */
+  EB.P.inv=[];EB.P.gold=10000;EB.P.xp.attack=w.eval('xpAt(10)');
+  EB.addGear({id:'fw_ripper',r:0});EB.addGear({id:'fw_tremor',r:0});
+  ok(!EB.doFuse('fw_gorehowl'),'fusion blocked below the Attack requirement');
+  EB.P.xp.attack=w.eval('xpAt(45)');EB.P.gold=100;
+  ok(!EB.doFuse('fw_gorehowl'),'fusion blocked without the gold fee');
+  EB.P.gold=10000;
+  ok(EB.doFuse('fw_gorehowl'),'fuses once Attack + gold are satisfied');
+
+  /* ---------- Phase 4: on-hit poison DoT damages a mob over time ---------- */
+  EB.P.inv=[];EB.P.xp.attack=w.eval('xpAt(45)');EB.P.xp.strength=w.eval('xpAt(45)');EB.P.style='aggressive';
+  EB.addGear({id:'fw_venomfang',r:0});EB.equipGear(EB.P.inv.findIndex(s=>s.gear));
+  ok(EB.P.gear.weapon.id==='fw_venomfang','equipped the poison fusion weapon');
+  ok(EB.weaponEffects(EB.P.gear.weapon).some(e=>e.k==='poison'),'weapon carries the poison effect');
+  EB.world.forest.mobs.forEach(m=>{m.aggro=false;m.wanderT=1e12;});
+  const pv=EB.world.forest.mobs.find(m=>m.type==='spider');
+  pv.alive=true;pv.hp=500;pv.dots=[];pv.tx=30;pv.ty=20;pv.px=960;pv.py=640;pv.moving=null;pv.aggro=false;
+  tp('forest',30,21);EB.P.hp=EB.maxHp();EB.P.atkT=0;
+  EB.setFight(pv);tick(6000); /* several swings — poison lands reliably; hp=500 so it survives */
+  ok(pv.dots&&pv.dots.length>0,'melee hit applied a poison DoT');
+  const hpAfterHits=pv.hp;
+  EB.P.action=null;tp('forest',5,5); // walk away; the DoT should keep ticking
+  tick(4000);
+  ok(pv.hp<hpAfterHits,'poison ticked damage after the player disengaged ('+hpAfterHits+'→'+pv.hp+')');
+  EB.P.gold=30000; /* restore the invariant the later save/load test depends on */
+
   /* ---------- panels render without throwing ---------- */
   EB.openInventory();EB.openEquipment();EB.openSkills();EB.openQuests();
   EB.openQuestBoard();EB.openBank();EB.openShop();EB.openMonument();EB.openCapes();EB.openSettings();
-  EB.openBestiary();EB.openCraft();
-  ok(true,'all 12 panels rendered (incl. crafting)');
+  EB.openBestiary();EB.openCraft();EB.openFuse();
+  ok(true,'all 13 panels rendered (incl. crafting + fusion)');
 
   /* ---------- floor menu: selective (one-item) pickup ---------- */
   tp('forest',40,20);EB.P.inv=[];

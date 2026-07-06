@@ -530,6 +530,7 @@ const NPC_LOOK={
   elder:      {body:'#6a6079',hair:'#dcd7c8',beard:'#dcd7c8',robe:1,prop:'staff',propC:'#cbd0d8'},
   guard:      {body:'#5c7a4a',hat:'#b8c4cf',helm:1,prop:'spear'},
   skillmaster:{body:'#b0862c',cape:'#9b5fb0',hair:'#5a4630',robe:1,trim:'#e8c451'},
+  forgemaster:{body:'#4a4038',hair:'#6a2a1a',skin:'#c98b6e',prop:'hammer',apron:1,trim:'#f0c419'},
 };
 function mkHumanoid(o,pose){
   const A=pose.a||[0,0],B=pose.b||[0,0];

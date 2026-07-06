@@ -21,6 +21,7 @@ function freshPlayer(){return{
   login:{last:'',streak:0},
   reached:{},        // region ids the player has set foot in (unlocks fast travel)
   bestiary:{},       // {creatureType:{dropKey:totalReceived}} — collection log
+  discovered:{},     // gearId -> true for fusion/unique weapons ever obtained (fusion silhouettes)
   grave:null,        // {map,x,y,items:[...],gold,left}  left = ms remaining
   stats:{kills:0,deaths:0,chopped:0,mined:0,bossKills:{},mobKills:{},legendaries:0,
          playMs:0,bestDrop:null,questsDone:0},
@@ -243,6 +244,40 @@ function doCraft(recipeId,count){
   return made;
 }
 
+/* ---------------- fusion (special-weapon crafting at the Forgemaster) --------
+   Consumes the recipe's input weapons + a gold fee; the result keeps the highest
+   input rarity. A per-effect upgrade roll (scales with Crafting level) may bump an
+   effect to its "greater" variant. Discovery: an input's recipe stays a silhouette
+   until you've obtained ≥1 of its ingredients (tracked in P.discovered). */
+function markDiscovered(id){if(GEAR[id]&&(GEAR[id].fusion||GEAR[id].unique)){(P.discovered||(P.discovered={}))[id]=true;}}
+function doFuse(resultId){
+  const rec=FUSE_RECIPES[resultId];if(!rec)return false;
+  const res=GEAR[resultId];
+  if(lvl('attack')<res.req){toast('Requires Attack '+res.req,'bad');return false;}
+  if(P.gold<rec.gold){toast('Need '+rec.gold+'g to fuse.','bad');return false;}
+  /* locate one inventory piece per input (distinct slots) */
+  const idxs=[];
+  for(const inId of rec.in){
+    const i=P.inv.findIndex((s,k)=>s.gear&&s.gear.id===inId&&!idxs.includes(k));
+    if(i<0){toast('Missing '+GEAR[inId].name,'bad');return false;}
+    idxs.push(i);
+  }
+  let maxR=0;for(const i of idxs)maxR=Math.max(maxR,P.inv[i].gear.r||0);
+  idxs.sort((a,b)=>b-a).forEach(i=>P.inv.splice(i,1)); /* consume high→low so indices stay valid */
+  P.gold-=rec.gold;
+  const up=[],chance=fuseUpgradeChance();
+  for(const k of res.fx)if(Math.random()<chance)up.push(k);
+  const piece={id:resultId,r:maxR,up};
+  addGear(piece);markDiscovered(resultId);
+  gainXp('crafting',400*res.ftier); /* fusing is a major Crafting reward */
+  sfx('level');itemPopup(piece);
+  const ups=up.length?' — Greater '+up.map(k=>EFFECTS[k].name).join(' & '):'';
+  toast('⚔ Forged '+GEAR[resultId].name+'!'+ups,'gold');
+  P.stats.bestDrop=gearName(piece);
+  updateHUD();save();
+  return true;
+}
+
 /* ---------------- quests ---------------- */
 function questState(id){
   const st=P.quests[id];
@@ -332,12 +367,13 @@ function itemPopup(piece){
   const g=GEAR[piece.id];if(!g)return;
   const r=piece.r||0;
   $('itempopIcon').src=iconURL(piece.id);
-  const nm=$('itempopName');nm.textContent=gearName(piece);nm.style.color=RARITY[r].color;
-  $('itempopKind').textContent=(g.unique?'unique':(RARITY[r].name.trim()||'item')).toUpperCase();
+  const nm=$('itempopName');nm.textContent=gearName(piece);
+  nm.style.color=g.fusion&&r<3?g.color:RARITY[r].color;
+  $('itempopKind').textContent=(g.fusion?'special':g.unique?'unique':(RARITY[r].name.trim()||'item')).toUpperCase();
   const el=$('itempop');el.classList.remove('go','deluxe');void el.offsetWidth;el.classList.add('go');
-  if(r>=4){el.classList.add('deluxe');
+  if(r>=4||g.ftier>=3){el.classList.add('deluxe');
     const dim=$('popdim');dim.classList.add('go');setTimeout(()=>dim.classList.remove('go'),1900);
-    spawnParticles(P.px+16,P.py,RARITY[r].color,22,2);}
+    spawnParticles(P.px+16,P.py,g.fusion?g.color:RARITY[r].color,22,2);}
   sfx('rare');
 }
 let xpBarTimer=null,xpSkill='woodcutting';
