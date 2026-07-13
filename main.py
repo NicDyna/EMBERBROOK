@@ -98,9 +98,14 @@ async def post_save(request: Request):
 # ----------------------------------------------------------------- static
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# App files must always revalidate (cheap etag 304s) — without this, browsers
+# apply heuristic freshness to responses that lack Cache-Control and installed
+# PWAs can keep serving a stale build for hours after a deploy.
+NO_CACHE = {"Cache-Control": "no-cache"}
+
 @app.get("/")
 def index():
-    return FileResponse("static/index.html")
+    return FileResponse("static/index.html", headers=NO_CACHE)
 
 @app.get("/{fname}")
 def root_files(fname: str):
@@ -108,5 +113,5 @@ def root_files(fname: str):
     allowed = {"sw.js", "manifest.json", "icon-192.png", "icon-512.png",
                "game.js"}
     if fname in allowed:
-        return FileResponse(f"static/{fname}")
+        return FileResponse(f"static/{fname}", headers=NO_CACHE)
     raise HTTPException(status_code=404)

@@ -82,6 +82,8 @@ function openEquipment(){
   }
   {const sp=SPECIALS[specKeyForWeapon()];
    h+='<div class="qrow"><span style="color:var(--gold)">⚡ '+esc(sp.name)+'</span><span class="hint">'+esc(sp.desc)+'</span></div>';}
+  h+='<div class="qrow"><span>Auto-retaliate <span class="hint">fight back when attacked</span></span>'+
+     '<button class="btn small'+(P.autoRetal?' sel':'')+'" data-act="autoretal">'+(P.autoRetal?'On':'Off')+'</button></div>';
   if(combatMode()==='melee'){
     h+='<div class="sect">Melee style — trains the chosen skill</div><div class="stylerow">';
     for(const[st,label,sk]of[['accurate','🎯 Accurate','attack'],['aggressive','⚔️ Aggressive','strength'],['defensive','🛡️ Defensive','defence']])
@@ -428,7 +430,12 @@ function syncStatusText(){
 }
 function openSettings(){
   const tok=store.get('eb_token')||'';
+  /* the build a device is actually running = the ?v= its HTML loaded */
+  const src=(document.querySelector('script[src*="game.js"]')||{}).getAttribute
+    ?document.querySelector('script[src*="game.js"]').getAttribute('src'):'';
+  const build=(src.match(/v=([\w.]+)/)||[])[1]||'dev';
   openPanel('Settings',
+    '<div class="qrow"><span>Build</span><span class="tag gold">v'+esc(build)+'</span></div>'+
     '<div class="qrow"><span>Sound</span><button class="btn small" data-act="togglesound">'+(soundOn?'On':'Off')+'</button></div>'+
     '<div class="qrow"><span>Save</span><button class="btn small" data-act="savenow">Save now</button></div>'+
     '<div class="sect">Cloud sync (this server)</div>'+
@@ -555,6 +562,9 @@ $('pbody').addEventListener('click',ev=>{
   else if(act==='openequip'){openEquipment();}
   else if(act==='eat'){eatFood(+arg);openInventory();}
   else if(act==='style'){P.style=arg;save();openEquipment();updateHUD();}
+  else if(act==='autoretal'){P.autoRetal=!P.autoRetal;
+    toast(P.autoRetal?'Auto-retaliate on — you fight back when attacked':'Auto-retaliate off','good');
+    save();openEquipment();}
   else if(act==='drop'){
     const s=P.inv[+arg];if(!s)return;
     P.inv.splice(+arg,1);
@@ -670,6 +680,17 @@ $('bMap').addEventListener('click',()=>{ensureAudio();toggleMinimap();});
 $('minimap').addEventListener('click',()=>{minimapOn=false;$('minimap').classList.remove('open');});
 $('bGear').addEventListener('click',()=>{ensureAudio();openSettings();});
 {const bt=$('bTravel');if(bt)bt.addEventListener('click',()=>{ensureAudio();openTravel();});}
+/* grouped HUD: the main button toggles its flyout (one open at a time);
+   pressing any sub-button closes the group again */
+document.querySelectorAll('.hgroup .main').forEach(b=>b.addEventListener('click',()=>{
+  ensureAudio();
+  const g=b.parentElement,was=g.classList.contains('open');
+  document.querySelectorAll('.hgroup.open').forEach(x=>x.classList.remove('open'));
+  if(!was)g.classList.add('open');
+}));
+document.querySelectorAll('.hgroup .sub .hbtn').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.hgroup.open').forEach(x=>x.classList.remove('open'));
+}));
 {const bs=$('bSpec');if(bs)bs.addEventListener('click',()=>{ensureAudio();useSpecial();});}
 {const bf=$('bFood');if(bf)bf.addEventListener('click',()=>{ensureAudio();
   const i=bestFoodIndex();if(i<0)toast('No food in your bag','bad');else eatFood(i);});}

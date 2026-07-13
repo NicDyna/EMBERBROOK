@@ -22,6 +22,10 @@ Attack, Strength, Defence, Ranged, Magic, Woodcutting, Mining.
   for Ranged/Magic).
 - Weapon speeds: melee 2000 ms, bow/staff 2600 ms (v3.2 pacing pass; fodder
   HP −20% to match — more kills/drops per minute).
+- **Auto-retaliate (v3.3.1, toggle in Equipment, default on):** an idle player
+  fights back when a mob's attack lands (or misses). Never steals an active
+  action and never interrupts walking / hold-steer / joystick movement, so
+  fleeing stays possible.
 - **Special attacks (⚡, v3.2):** energy 0–100 regenerating to full in 45 s;
   every special costs 40. One big HUD button; guaranteed-hit signature moves
   per weapon — fusion weapons key on their first effect (Boar Cleaver →
@@ -100,7 +104,10 @@ mob is attacking you; dungeons are entered from inside their region.
 
 ## Living world (v3.2)
 - **Movement:** tap-to-move plus **hold-to-steer** — press & hold and the hero
-  walks continuously toward the pointer (greedy 8-dir, corner-guarded).
+  walks continuously toward the pointer (greedy 8-dir, corner-guarded) — plus a
+  **virtual joystick** (v3.3, bottom-centre pad, 8 sectors with a deadzone).
+- **Mob manners (v3.3):** a mob sharing the player's tile shuffles aside; a
+  de-aggroed chaser **leashes back to its spawn** instead of freezing in place.
 - **Alpha elites:** ~4% of fodder respawns come back as a gold-aura'd "Alpha"
   (1.6× HP, +30% damage, double XP, three loot rolls). Ambient RNG only.
 - **Events** every 2.5–5 min in the wilds (`rollWorldEvent`, ambient RNG):
@@ -110,6 +117,15 @@ mob is attacking you; dungeons are entered from inside their region.
   runtime-only (never saved).
 - **Biome weather:** drifting leaves / snow / pollen / sand-wisp motes per
   region — pure atmosphere, ambient RNG.
+
+## UI & art (v3.3)
+- **HUD groups:** the right-side column is three flyout groups — 🎒 Pack
+  (inventory/equipment/style), 📜 Journal (quests/skills/bestiary), 🗺️ World
+  (map/travel) — plus ⚙️ Settings; one group open at a time.
+- **Item icons:** outlined pixel-art designs (16-grid at 2×) in `iconShape`.
+- **Enemies:** fodder + semi-bosses are 32×40 detailed sprites anchored at the
+  feet (p6 offsets bars/highlight by sprite height; p8 hit-test matches);
+  bosses stay 32px drawn 2×.
 
 ## Retention & goals
 - 7 linear quests (the last four clear each region's dungeon boss, ending

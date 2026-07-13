@@ -37,6 +37,16 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);
 .hbtn{width:50px;height:50px;border-radius:8px;border:2px solid var(--border);background:#241d14ee;
   color:var(--ink);font-size:22px;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .hbtn:active{background:var(--panel2);transform:scale(.94)}
+/* grouped HUD buttons: main button per group, sub-buttons fly out leftward */
+.hgroup{display:flex;justify-content:flex-end;align-items:center;gap:8px}
+.hgroup .sub{display:none;gap:8px;background:#14110dcc;border-radius:10px;padding:3px}
+.hgroup.open .sub{display:flex}
+.hgroup.open .main{border-color:var(--gold);color:var(--gold)}
+/* virtual joystick (bottom centre; input handled in p8) */
+#joy{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);
+  z-index:5;width:96px;height:96px;border-radius:50%;border:2px solid #6b513866;background:#241d1433;touch-action:none}
+#joyknob{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;
+  border:2px solid var(--border);background:#3a3022bb;pointer-events:none}
 /* xp bar */
 #xpwrap{position:fixed;left:8px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:5;width:min(220px,50vw);
   background:#1d1a16e6;border:2px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;
@@ -184,16 +194,32 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);
 <button id="bFood" aria-label="Quick eat" style="display:none">🍖<span id="foodqty"></span></button>
 <div id="xpwrap"><span id="xplabel"></span><div class="bar"><div id="xpfill"></div></div><span id="xpnum"></span></div>
 <div id="btns">
-  <button class="hbtn" id="bInv" aria-label="Inventory">🎒</button>
-  <button class="hbtn" id="bEquip" aria-label="Equipment">⚔️</button>
-  <button class="hbtn" id="bSkills" aria-label="Skills">📖</button>
-  <button class="hbtn" id="bQuests" aria-label="Quests">📜</button>
-  <button class="hbtn" id="bBestiary" aria-label="Bestiary">🐾</button>
-  <button class="hbtn" id="bMap" aria-label="Map">🗺️</button>
-  <button class="hbtn" id="bTravel" aria-label="Travel">🏠</button>
+  <div class="hgroup" id="gPack">
+    <div class="sub">
+      <button class="hbtn" id="bInv" aria-label="Inventory">🎒</button>
+      <button class="hbtn" id="bEquip" aria-label="Equipment">⚔️</button>
+      <button class="hbtn" id="stylebtn" aria-label="Combat style">🎯</button>
+    </div>
+    <button class="hbtn main" aria-label="Pack">🎒</button>
+  </div>
+  <div class="hgroup" id="gJournal">
+    <div class="sub">
+      <button class="hbtn" id="bQuests" aria-label="Quests">📜</button>
+      <button class="hbtn" id="bSkills" aria-label="Skills">📖</button>
+      <button class="hbtn" id="bBestiary" aria-label="Bestiary">🐾</button>
+    </div>
+    <button class="hbtn main" aria-label="Journal">📜</button>
+  </div>
+  <div class="hgroup" id="gWorld">
+    <div class="sub">
+      <button class="hbtn" id="bMap" aria-label="Map">🗺️</button>
+      <button class="hbtn" id="bTravel" aria-label="Travel">🏠</button>
+    </div>
+    <button class="hbtn main" aria-label="World">🗺️</button>
+  </div>
   <button class="hbtn" id="bGear" aria-label="Settings">⚙️</button>
-  <button class="hbtn" id="stylebtn" aria-label="Combat style">🎯</button>
 </div>
+<div id="joy"><div id="joyknob"></div></div>
 <div id="panel"><div class="pbox">
   <div class="phead"><span id="ptitle"></span><button class="pclose" id="pclose">✕</button></div>
   <div id="pbody"></div>
@@ -206,6 +232,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);
   <div class="mmhead"><span id="mmlabel"></span><span class="mmhint">tap to close</span></div>
   <canvas id="mmcv"></canvas>
 </div></div>
-<script src="/game.js?v=3.2.0"></script>
+<script src="/game.js?v=3.3.1"></script>
 </body>
 </html>

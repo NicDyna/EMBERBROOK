@@ -9,6 +9,7 @@ function freshPlayer(){return{
   xp:{attack:0,strength:0,defence:0,ranged:0,magic:0,woodcutting:0,mining:0,crafting:0},
   style:'accurate', // melee training style: accurate|aggressive|defensive
   spec:SPEC_MAX,     // special-attack energy 0–100 (⚡ button)
+  autoRetal:true,    // auto-retaliate: fight back when attacked while idle
   gold:0,
   inv:[],            // [{id,qty}] for stackables, [{gear:{id,r}}] for gear
   bank:{},           // stackables only: id -> qty

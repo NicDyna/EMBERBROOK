@@ -57,8 +57,9 @@ function bindInput(){
     if(d){setLoot(d);clickMark={x:tx,y:ty,t0:T};return;}
     const m=mobAt(P.map,tx,ty)||world[P.map].mobs.find(mm=>{
       if(!mm.alive)return false;
-      const big=MOBS[mm.type].boss?30:18;
-      return Math.abs(mm.px+16-wx)<big&&Math.abs(mm.py+16-(MOBS[mm.type].boss?16:0)-wy)<big;
+      const boss=MOBS[mm.type].boss;
+      const big=boss?30:20, cy=boss?mm.py:mm.py+12; /* fodder sprites are 40px tall now */
+      return Math.abs(mm.px+16-wx)<big&&Math.abs(cy-wy)<big;
     });
     if(m){setFight(m);clickMark={x:m.tx,y:m.ty,t0:T};return;}
     const n=npcAt(P.map,tx,ty);
@@ -101,6 +102,27 @@ function bindInput(){
     tapAt(p.tx,p.ty,p.wx,p.wy);
   });
   cv.addEventListener('pointercancel',()=>{HOLD.down=false;HOLD.steer=false;endPress();});
+  /* ---- virtual joystick (bottom-centre pad) ---- */
+  const joy=$('joy'),knob=$('joyknob');
+  if(joy){
+    const R=30; /* knob travel radius (px) */
+    let pid=null;
+    const setFrom=ev=>{
+      const r=joy.getBoundingClientRect();
+      const dx=ev.clientX-(r.left+r.width/2),dy=ev.clientY-(r.top+r.height/2);
+      const mag=Math.hypot(dx,dy)||1,cl=Math.min(mag,R);
+      knob.style.transform='translate('+(dx/mag*cl).toFixed(1)+'px,'+(dy/mag*cl).toFixed(1)+'px)';
+      if(mag<11){JOY.dx=0;JOY.dy=0;return;} /* deadzone */
+      JOY.dx=Math.abs(dx)/mag>0.383?Math.sign(dx):0; /* 8 sectors (22.5° splits) */
+      JOY.dy=Math.abs(dy)/mag>0.383?Math.sign(dy):0;
+    };
+    joy.addEventListener('pointerdown',ev=>{ensureAudio();pid=ev.pointerId;
+      try{joy.setPointerCapture(pid);}catch(e){}
+      JOY.active=true;setFrom(ev);ev.preventDefault();});
+    joy.addEventListener('pointermove',ev=>{if(JOY.active&&ev.pointerId===pid)setFrom(ev);});
+    const jend=()=>{JOY.active=false;JOY.dx=0;JOY.dy=0;pid=null;knob.style.transform='';};
+    joy.addEventListener('pointerup',jend);joy.addEventListener('pointercancel',jend);
+  }
   window.addEventListener('resize',resize);
 }
 

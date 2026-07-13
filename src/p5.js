@@ -4,6 +4,8 @@
 const STEP_MS=170, MOB_STEP=280;
 /* hold-to-steer state (written by input in p8, consumed by update below) */
 const HOLD={down:false,cx:0,cy:0,t0:0,onDrop:false,steer:false};
+/* virtual joystick state (bottom-centre pad in p8; dx/dy are -1|0|1 sectors) */
+const JOY={active:false,dx:0,dy:0,moved:false};
 /* living-world event scheduler (ambient RNG only — see rollWorldEvent) */
 const EVT={next:0};
 function startStep(e,dur){
@@ -603,6 +605,13 @@ function updateMobs(){
     if(!m.alive)continue; /* a DoT tick may have killed it */
     stepEntity(m);
     if(m.moving)continue;
+    if(m.tx===P.tx&&m.ty===P.ty){ /* the player stepped under it — shuffle aside */
+      for(const[a,b]of[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]]){
+        const nx=m.tx+a,ny=m.ty+b;
+        if(walkable(P.map,nx,ny)&&!mobAt(P.map,nx,ny)){m.path=[[nx,ny]];startStep(m,140);break;}
+      }
+      continue;
+    }
     if(d.flee){ /* treasure critter: skitters away, escapes if not caught */
       if(m.expireAt&&T>m.expireAt){m.alive=false;toast('✨ The scarab burrowed away…');continue;}
       if(distTiles(m.tx,m.ty,P.tx,P.ty)<=6){
@@ -633,6 +642,11 @@ function updateMobs(){
           if(d.style==='magic')shoot(m.px+16,m.py+8,P.px+16,P.py+8,'#b06fd1');
           m.lungeT=T; /* renderer lunges the mob toward the player briefly */
           hurtPlayer(dmg);
+          /* auto-retaliate: an idle player fights back. Never steals an active
+             action, never interrupts walking/steering/joystick flight, and
+             skips if the hit just killed us (die() warped us to town). */
+          if(P.autoRetal&&m.alive&&world[P.map]===W&&!P.action&&!P.moving&&!P.path.length
+             &&!HOLD.steer&&!(JOY.active&&(JOY.dx||JOY.dy)))setFight(m);
         }
       }else{
         const path=findPath(P.map,m.tx,m.ty,P.tx,P.ty,true);
@@ -640,6 +654,13 @@ function updateMobs(){
       }
     }else{
       m.atkT=0;
+      /* leash: a mob that chased far from home marches back to its spawn
+         area instead of freezing where the pursuit ended */
+      if(!m.temp&&distTiles(m.tx,m.ty,m.hx,m.hy)>3){
+        const path=findPath(P.map,m.tx,m.ty,m.hx,m.hy,false);
+        if(path&&path.length){m.path=[path[0]];startStep(m,MOB_STEP*0.8);}
+        continue;
+      }
       if(T>=m.wanderT){
         m.wanderT=T+rand(1800,4500);
         const dirs=[[1,0],[-1,0],[0,1],[0,-1]].filter(([dx,dy])=>{
@@ -739,6 +760,19 @@ function update(dt){
   P.stats.playMs+=dt;
   P.spec=Math.min(SPEC_MAX,(P.spec==null?SPEC_MAX:P.spec)+dt*SPEC_REGEN);
   stepEntity(P);
+  /* virtual joystick: continuous 8-dir movement while the pad is held */
+  if(JOY.active&&(JOY.dx||JOY.dy)){
+    if(!JOY.moved){JOY.moved=true;P.action=null;P.path=[];}
+    if(!P.moving){
+      const dx=JOY.dx,dy=JOY.dy;
+      const ok=(x,y)=>walkable(P.map,x,y);
+      let nx=P.tx,ny=P.ty;
+      if(dx&&dy&&ok(P.tx+dx,P.ty+dy)&&ok(P.tx+dx,P.ty)&&ok(P.tx,P.ty+dy)){nx+=dx;ny+=dy;}
+      else if(dx&&ok(P.tx+dx,P.ty))nx+=dx;
+      else if(dy&&ok(P.tx,P.ty+dy))ny+=dy;
+      if(nx!==P.tx||ny!==P.ty)P.path=[[nx,ny]];
+    }
+  }else JOY.moved=false;
   /* hold-to-steer: press & hold walks continuously toward the pointer */
   if(HOLD.down&&!HOLD.onDrop&&T-HOLD.t0>220){
     if(!HOLD.steer){HOLD.steer=true;P.action=null;P.path=[];}

@@ -399,6 +399,36 @@ setTimeout(()=>{
   ok(EB.world.forest.res.every(r=>!r.temp),'expired meteor nodes clean up');
   ok(w.eval("MOBS.spider.hp")===10&&w.eval("GEAR.g_m_6_weapon.spd")===2000,'v3.2 pacing values live');
 
+  /* ---------- v3.3: joystick, mob overlap step-off, leash, big sprites ---------- */
+  tp('forest',30,20);EB.world.forest.mobs.forEach(m=>{m.alive=false;m.aggro=false;m.wanderT=1e12;});
+  w.eval('JOY.active=true;JOY.dx=1;JOY.dy=0');tick(1500);w.eval('JOY.active=false;JOY.dx=0');
+  ok(EB.P.tx>30,'joystick drives movement east ('+EB.P.tx+')');
+  const om=EB.world.forest.mobs[0];
+  om.type='spider';om.alive=true;om.hp=10;om.aggro=false;om.moving=null;om.elite=false;om.temp=false;
+  om.tx=EB.P.tx;om.ty=EB.P.ty;om.px=om.tx*32;om.py=om.ty*32;om.hx=om.tx;om.hy=om.ty;
+  tick(1000);
+  ok(!(om.tx===EB.P.tx&&om.ty===EB.P.ty),'mob steps off the player\'s tile');
+  const lm=EB.world.forest.mobs[1];
+  lm.type='boar';lm.alive=true;lm.hp=13;lm.aggro=false;lm.moving=null;lm.elite=false;lm.temp=false;
+  lm.hx=20;lm.hy=20;lm.tx=32;lm.ty=28;lm.px=32*32;lm.py=28*32;lm.wanderT=0;
+  tick(4000);
+  ok(Math.max(Math.abs(lm.tx-20),Math.abs(lm.ty-20))<12,'de-aggroed mob leashes back toward home');
+  ok(w.eval('SPR.spider.height')===40&&w.eval('SPR.tomb_guardian.height')===40,'fodder/semi sprites upsized to 40px');
+
+  /* ---------- v3.3.1: auto-retaliate ---------- */
+  ok(EB.freshPlayer().autoRetal===true,'auto-retaliate defaults on');
+  tp('forest',30,21);EB.P.autoRetal=true;EB.P.hp=EB.maxHp();
+  EB.world.forest.mobs.forEach(m=>{m.alive=false;m.aggro=false;m.wanderT=1e12;});
+  const rm=EB.world.forest.mobs[0];
+  rm.type='spider';rm.alive=true;rm.hp=99;rm.elite=false;rm.temp=false;
+  rm.tx=30;rm.ty=20;rm.px=960;rm.py=640;rm.moving=null;rm.aggro=true;rm.atkT=w.EB.T+100;
+  tick(4000);
+  ok(EB.P.action&&EB.P.action.kind==='fight','idle player retaliates when attacked');
+  EB.P.action=null;EB.P.autoRetal=false;rm.atkT=w.EB.T+100;
+  tick(4000);
+  ok(!EB.P.action,'auto-retaliate off is respected');
+  EB.P.autoRetal=true;
+
   console.log(fails? '\n'+fails+' FAILURES':'\nALL TESTS PASSED');
   process.exit(fails?1:0);
  }catch(e){console.log('CRASH:',e);process.exit(1);}
