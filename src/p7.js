@@ -80,6 +80,8 @@ function openEquipment(){
     for(const e of weaponEffects(wpn))
       h+='<div class="qrow"><span style="color:'+EFFECTS[e.k].color+'">✦ '+esc(effDesc(e.k,e.greater))+'</span><span class="hint">'+esc(EFFECTS[e.k].desc)+'</span></div>';
   }
+  {const sp=SPECIALS[specKeyForWeapon()];
+   h+='<div class="qrow"><span style="color:var(--gold)">⚡ '+esc(sp.name)+'</span><span class="hint">'+esc(sp.desc)+'</span></div>';}
   if(combatMode()==='melee'){
     h+='<div class="sect">Melee style — trains the chosen skill</div><div class="stylerow">';
     for(const[st,label,sk]of[['accurate','🎯 Accurate','attack'],['aggressive','⚔️ Aggressive','strength'],['defensive','🛡️ Defensive','defence']])
@@ -668,6 +670,9 @@ $('bMap').addEventListener('click',()=>{ensureAudio();toggleMinimap();});
 $('minimap').addEventListener('click',()=>{minimapOn=false;$('minimap').classList.remove('open');});
 $('bGear').addEventListener('click',()=>{ensureAudio();openSettings();});
 {const bt=$('bTravel');if(bt)bt.addEventListener('click',()=>{ensureAudio();openTravel();});}
+{const bs=$('bSpec');if(bs)bs.addEventListener('click',()=>{ensureAudio();useSpecial();});}
+{const bf=$('bFood');if(bf)bf.addEventListener('click',()=>{ensureAudio();
+  const i=bestFoodIndex();if(i<0)toast('No food in your bag','bad');else eatFood(i);});}
 const sb=$('stylebtn');
 if(sb)sb.addEventListener('click',()=>{
   const order=['accurate','aggressive','defensive'];

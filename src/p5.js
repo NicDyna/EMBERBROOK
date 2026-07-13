@@ -2,6 +2,10 @@
        speed, combat triangle, ammo), ground loot + gravestone death,
        food & regen, mob/boss AI, main update loop */
 const STEP_MS=170, MOB_STEP=280;
+/* hold-to-steer state (written by input in p8, consumed by update below) */
+const HOLD={down:false,cx:0,cy:0,t0:0,onDrop:false,steer:false};
+/* living-world event scheduler (ambient RNG only — see rollWorldEvent) */
+const EVT={next:0};
 function startStep(e,dur){
   const n=e.path.shift();if(!n)return;
   const[nx,ny]=n;
@@ -287,6 +291,65 @@ function eatFood(invIndex){
   updateHUD();
 }
 
+/* ---------------- special attacks (⚡ button) ----------------
+   Guaranteed-hit signature moves resolved by weapon (see SPECIALS in p1).
+   Costs SPEC_COST energy; energy regenerates over time in update(). */
+function specDamage(t,dmg){ /* one packet of special damage, with feedback */
+  t.hp-=dmg;t.aggro=true;
+  floater(t.px+16,t.py-6,'-'+dmg,'#ffd24a',13);
+  spawnParticles(t.px+16,t.py+8,'#ffe98a',8,1.5);
+  gainXp(trainSkill(),dmg*4);
+  if(t.hp<=0)killMob(t);
+}
+function useSpecial(){
+  if((P.spec||0)<SPEC_COST){toast('⚡ Not enough energy','bad');return;}
+  const t=P.action&&P.action.kind==='fight'?findTarget():null;
+  if(!t||!t.alive){toast('Attack a target first, then unleash ⚡');return;}
+  if(distTiles(P.tx,P.ty,t.tx,t.ty)>weaponRange()){toast('Too far away!');return;}
+  if(T-(P.eatT||0)<900)return; /* just ate */
+  const atk=playerAttack(),mode=atk.mode,md=MOBS[t.type];
+  const key=specKeyForWeapon(),sp=SPECIALS[key];
+  const ammo=ammoFor(mode);
+  if(ammo){const need=key==='ranged'?3:1;
+    if(invCount(ammo)<need){toast('Not enough '+ITEMS[ammo].name+'!','bad');return;}
+    removeItem(ammo,need);}
+  P.spec-=SPEC_COST;P.atkT=T;P.specT=T;
+  const tri=triangle(mode,md.style);
+  const base=mult=>Math.max(1,Math.round(atk.maxHit*mult*tri*(rand(88,100)/100)));
+  sfx('spec');shake(4);
+  floater(P.px+16,P.py-20,sp.name+'!','#f0c419',12);
+  const others=fn=>{for(const m of world[P.map].mobs){if(m!==t&&m.alive)fn(m);}};
+  switch(key){
+    case'melee':specDamage(t,base(1.8));break;
+    case'ranged':{for(let i=0;i<3;i++){shoot(P.px+16,P.py+8,t.px+16,t.py+8,'#ffd24a');
+      if(t.alive)specDamage(t,base(0.8));}sfx('shoot');break;}
+    case'magic':{shoot(P.px+16,P.py+8,t.px+16,t.py+8,'#c9a5ff');specDamage(t,base(1.4));
+      const s=base(0.6);others(m=>{if(distTiles(m.tx,m.ty,t.tx,t.ty)<=1)specDamage(m,s);});break;}
+    case'poison':case'burn':case'bleed':{specDamage(t,base(1.3));
+      if(t.alive){const g=EFFECTS[key].g;addDot(t,key,g.dmg*2,g.ticks);}break;}
+    case'cleave':{specDamage(t,base(1.0));
+      others(m=>{if(distTiles(m.tx,m.ty,P.tx,P.ty)<=1)specDamage(m,base(1.0));});break;}
+    case'pierce':{specDamage(t,base(1.0));
+      const dx=Math.sign(t.tx-P.tx),dy=Math.sign(t.ty-P.ty);
+      for(let i=1;i<=4;i++){const m=mobAt(P.map,P.tx+dx*i,P.ty+dy*i);
+        if(m&&m!==t&&m.alive)specDamage(m,base(0.8));}break;}
+    case'knockback':{specDamage(t,base(1.2));if(t.alive)knockbackMob(t,2);
+      others(m=>{if(distTiles(m.tx,m.ty,P.tx,P.ty)<=1){specDamage(m,base(0.8));if(m.alive)knockbackMob(m,2);}});break;}
+    case'reach':{specDamage(t,base(1.4));
+      others(m=>{if(distTiles(m.tx,m.ty,t.tx,t.ty)<=1&&distTiles(m.tx,m.ty,P.tx,P.ty)<=weaponRange())specDamage(m,base(0.9));});break;}
+    case'crush':specDamage(t,base(1.6));break;
+    case'execute':specDamage(t,base(t.hp/md.hp<=0.5?2.2:1.4));break;
+    case'lifesteal':{const d0=base(1.5);specDamage(t,d0);
+      const heal=Math.min(maxHp()-P.hp,d0);
+      if(heal>0){P.hp+=heal;floater(P.px+8,P.py-28,'+'+heal,'#c98bff',10);}break;}
+    case'slashwave':{specDamage(t,base(1.2));const wave=base(1.0);
+      shoot(P.px+16,P.py+8,P.px+16+P.facing*120,P.py+8,'#f0c419');
+      for(let i=1;i<=4;i++){const m=mobAt(P.map,P.tx+P.facing*i,P.ty);
+        if(m&&m!==t&&m.alive)specDamage(m,wave);}break;}
+  }
+  updateHUD();
+}
+
 /* ---------------- the action tick ---------------- */
 function doAction(){
   if(!P.action)return;
@@ -350,7 +413,7 @@ function doAction(){
   }
   if(P.action.kind==='fight'){
     t.aggro=true;
-    if(T-(P.eatT||0)<1200)return; /* just ate */
+    if(T-(P.eatT||0)<900)return; /* just ate (snappier than the old 1.2 s) */
     if(T-(P.atkT||0)>=weaponSpeed()){
       const atk=playerAttack();
       const mode=atk.mode;
@@ -469,7 +532,13 @@ function killMob(m){
   m.alive=false;m.aggro=false;m.dots=[];m.respawnAt=T+(d.respawn||9000);
   gainXp(trainSkill(),d.xp);
   const loot=rollLoot(m);loot.src=m.type; /* tag for the bestiary */
+  if(m.elite){ /* elites: double XP + two bonus loot rolls */
+    gainXp(trainSkill(),d.xp);
+    for(let i=0;i<2;i++){const ex=rollLoot(m);loot.gold+=ex.gold;loot.items.push(...ex.items);}
+    floater(m.px+16,m.py-14,'ALPHA SLAIN','#f0c419',12);
+  }
   spawnDrop(P.map,m.tx,m.ty,loot);
+  if(d.flee){sfx('rare');spawnParticles(m.px+16,m.py+8,'#ffd700',26,2.2);toast('✨ Caught it! The scarab bursts with treasure!','gold');}
   sfx('kill');
   spawnParticles(m.px+16,m.py+10,d.boss?'#ffcf5a':'#e8b070',d.boss?22:12,d.boss?2.2:1.4);
   P.stats.kills++;
@@ -522,13 +591,31 @@ function updateMobs(){
   for(const m of W.mobs){
     const d=MOBS[m.type];
     if(!m.alive){
-      if(T>=m.respawnAt){m.alive=true;m.hp=d.hp;m.dots=[];m.tx=m.hx;m.ty=m.hy;m.px=m.tx*TILE;m.py=m.ty*TILE;m.moving=null;}
+      if(!m.temp&&T>=m.respawnAt){m.alive=true;m.hp=d.hp;m.dots=[];m.tx=m.hx;m.ty=m.hy;m.px=m.tx*TILE;m.py=m.ty*TILE;m.moving=null;
+        /* rare ELITE respawn: tougher, meaner, triple loot (ambient RNG so the
+           gameplay/loot stream — and the smoke tests — stay undisturbed) */
+        m.elite=(!d.boss&&!d.semi&&!d.flee&&ambChance(0.04));
+        if(m.elite)m.hp=Math.round(d.hp*1.6);
+      }
       continue;
     }
     tickDots(m);
     if(!m.alive)continue; /* a DoT tick may have killed it */
     stepEntity(m);
     if(m.moving)continue;
+    if(d.flee){ /* treasure critter: skitters away, escapes if not caught */
+      if(m.expireAt&&T>m.expireAt){m.alive=false;toast('✨ The scarab burrowed away…');continue;}
+      if(distTiles(m.tx,m.ty,P.tx,P.ty)<=6){
+        const dx=Math.sign(m.tx-P.tx),dy=Math.sign(m.ty-P.ty);
+        for(const[a,b]of[[dx,dy],[dx,0],[0,dy],[dx,-dy],[-dx,dy]]){
+          if(!a&&!b)continue;
+          const nx=m.tx+a,ny=m.ty+b;
+          if(walkable(P.map,nx,ny)&&!mobAt(P.map,nx,ny)&&!(nx===P.tx&&ny===P.ty)){
+            m.path=[[nx,ny]];startStep(m,190);break;}
+        }
+      }
+      continue;
+    }
     if(d.aggro&&!m.aggro&&distTiles(m.tx,m.ty,P.tx,P.ty)<=4)m.aggro=true;
     if(m.aggro){
       const dist=distTiles(m.tx,m.ty,P.tx,P.ty);
@@ -541,6 +628,7 @@ function updateMobs(){
           const chance=hitChance(d.acc*2+8,playerDefence()*(tri>1?0.95:1));
           let dmg=0;
           if(Math.random()<chance)dmg=Math.max(1,Math.round(rand(1,Math.max(1,Math.floor(1+d.pow*0.40)))*tri));
+          if(m.elite)dmg=Math.round(dmg*1.3);
           if(d.style==='ranged')shoot(m.px+16,m.py+8,P.px+16,P.py+8,'#d8d5c8');
           if(d.style==='magic')shoot(m.px+16,m.py+8,P.px+16,P.py+8,'#b06fd1');
           m.lungeT=T; /* renderer lunges the mob toward the player briefly */
@@ -563,7 +651,66 @@ function updateMobs(){
       }
     }
   }
-  for(const r of W.res)if(!r.alive&&T>=r.respawnAt){r.alive=true;r.charges=RES[r.type].hp||1;}
+  /* temp (event) mobs vanish once dead — they never respawn */
+  for(let i=W.mobs.length-1;i>=0;i--)if(W.mobs[i].temp&&!W.mobs[i].alive)W.mobs.splice(i,1);
+  for(let i=W.res.length-1;i>=0;i--){const r=W.res[i];
+    if(r.temp){ /* event nodes: remove when depleted or timed out */
+      if(!r.alive||T>r.expireAt){W.grid[r.y][r.x]=MAPS[P.map].ground;W.res.splice(i,1);}
+    }else if(!r.alive&&T>=r.respawnAt){r.alive=true;r.charges=RES[r.type].hp||1;}
+  }
+}
+
+/* ---------------- living-world events (ambient RNG only) ----------------
+   Every few minutes in the wilds, something happens: a meteor with rich ore,
+   an ambush, or a treasure scarab. Temp mobs/nodes are runtime-only. */
+function evtSpot(W,minD,maxD){
+  for(let tries=0;tries<60;tries++){
+    const x=1+ambRand(0,W.w-3),y=1+ambRand(0,W.h-3);
+    const dd=distTiles(x,y,P.tx,P.ty);
+    if(dd>=minD&&dd<=maxD&&walkable(P.map,x,y)&&!mobAt(P.map,x,y)&&!resAt(P.map,x,y)&&!dropAt(P.map,x,y))return[x,y];
+  }
+  return null;
+}
+const METEOR_NODE={forest:'I',mountains:'Z',plains:'e',desert:'u'}; /* region-appropriate ore */
+function evtMeteor(W){
+  const spot=evtSpot(W,8,26);if(!spot)return;
+  const[x,y]=spot,type=METEOR_NODE[P.map]||'Z';
+  let placed=0;
+  for(const[cx,cy]of[[x,y],[x+1,y],[x,y+1],[x-1,y],[x,y-1]]){
+    if(placed>=3)break;
+    if(!walkable(P.map,cx,cy)||resAt(P.map,cx,cy)||mobAt(P.map,cx,cy))continue;
+    W.grid[cy][cx]=type;
+    W.res.push({id:'evt:'+cx+':'+cy,type,x:cx,y:cy,alive:true,respawnAt:0,
+      charges:4,temp:true,expireAt:T+180000});
+    placed++;
+  }
+  if(placed){toast('☄️ A meteor crashed nearby — rich '+RES[type].name+'s for 3 minutes!','gold');sfx('rare');shake(5);}
+}
+function evtAmbush(W){
+  const pool=[...new Set(W.mobs.filter(m=>{const d=MOBS[m.type];return d&&!d.boss&&!d.semi&&!d.flee;}).map(m=>m.type))];
+  if(!pool.length)return;
+  const n=ambRand(2,3);let spawned=0;
+  for(let tries=0;tries<40&&spawned<n;tries++){
+    const ang=ambRand(0,359)*Math.PI/180,dd=ambRand(4,6);
+    const x=P.tx+Math.round(Math.cos(ang)*dd),y=P.ty+Math.round(Math.sin(ang)*dd);
+    if(!walkable(P.map,x,y)||mobAt(P.map,x,y))continue;
+    const t=pool[ambRand(0,pool.length-1)],d=MOBS[t];
+    W.mobs.push({id:P.map+':evt'+(T|0)+':'+spawned,type:t,hx:x,hy:y,tx:x,ty:y,px:x*TILE,py:y*TILE,
+      hp:d.hp,alive:true,respawnAt:0,moving:null,aggro:true,atkT:T+600,wanderT:0,temp:true});
+    spawned++;
+  }
+  if(spawned){toast('⚔️ Ambush! '+spawned+' foes leap from hiding!','bad');sfx('hurt');shake(6);}
+}
+function evtScarab(W){
+  const spot=evtSpot(W,5,10);if(!spot)return;
+  const[x,y]=spot;
+  W.mobs.push({id:P.map+':scarab'+(T|0),type:'gilded_scarab',hx:x,hy:y,tx:x,ty:y,px:x*TILE,py:y*TILE,
+    hp:1,alive:true,respawnAt:0,moving:null,aggro:false,atkT:0,wanderT:0,temp:true,expireAt:T+45000});
+  toast('✨ A Gilded Scarab scuttles nearby — catch it before it burrows!','gold');sfx('coin');
+}
+function rollWorldEvent(){
+  const W=world[P.map],r=ambRand(1,100);
+  if(r<=40)evtMeteor(W);else if(r<=75)evtAmbush(W);else evtScarab(W);
 }
 /* townsfolk gently mill about near their post (gives them a walk cycle) */
 function updateNpcs(){
@@ -590,11 +737,36 @@ let FRAME_DT=16;
 function update(dt){
   FRAME_DT=dt;T+=dt;
   P.stats.playMs+=dt;
+  P.spec=Math.min(SPEC_MAX,(P.spec==null?SPEC_MAX:P.spec)+dt*SPEC_REGEN);
   stepEntity(P);
+  /* hold-to-steer: press & hold walks continuously toward the pointer */
+  if(HOLD.down&&!HOLD.onDrop&&T-HOLD.t0>220){
+    if(!HOLD.steer){HOLD.steer=true;P.action=null;P.path=[];}
+    if(!P.moving){
+      const rect=cv.getBoundingClientRect(),cam=camera();
+      const wx=(HOLD.cx-rect.left)/SCALE+cam.camx,wy=(HOLD.cy-rect.top)/SCALE+cam.camy;
+      const ttx=Math.floor(wx/TILE),tty=Math.floor(wy/TILE);
+      if(ttx!==P.tx||tty!==P.ty){
+        const dx=Math.sign(ttx-P.tx),dy=Math.sign(tty-P.ty);
+        const ok=(x,y)=>walkable(P.map,x,y);
+        let nx=P.tx,ny=P.ty;
+        /* diagonal only when both cardinals are open (no corner-cutting) */
+        if(dx&&dy&&ok(P.tx+dx,P.ty+dy)&&ok(P.tx+dx,P.ty)&&ok(P.tx,P.ty+dy)){nx+=dx;ny+=dy;}
+        else if(dx&&ok(P.tx+dx,P.ty))nx+=dx;
+        else if(dy&&ok(P.tx,P.ty+dy))ny+=dy;
+        if(nx!==P.tx||ny!==P.ty)P.path=[[nx,ny]];
+      }
+    }
+  }
   if(!P.moving){
     const ex=exitAt(P.map,P.tx,P.ty);
     if(ex){switchMap(ex);return;}
     doAction(); /* before the next step: lets ranged/magic stop at range */
+  }
+  /* living-world events: every few minutes in the wilds, something happens */
+  if(REGION_ORDER.includes(P.map)){
+    if(!EVT.next)EVT.next=T+ambRand(90000,180000);
+    if(T>=EVT.next){EVT.next=T+ambRand(150000,300000);rollWorldEvent();}
   }
   if(!P.moving&&P.path.length){
     const[nx,ny]=P.path[0];

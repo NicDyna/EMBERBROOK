@@ -86,7 +86,7 @@ const GEAR={};
                  reqSkill:ld.reqSkill[slot],color:ld.metal[t-1].trim(),stats:{}};
         if(slot==='weapon'){
           g.stats.acc=3+4*t; g.stats.pow=2+3*t;
-          g.spd = L==='m'?2400:3000;
+          g.spd = L==='m'?2000:2600; /* v3.2 pacing: snappier swings across the board */
           if(L==='r')g.ammo='arrows';
           if(L==='g')g.ammo='runes';
         }else{
@@ -110,13 +110,13 @@ const GEAR={};
    drop only from their boss and wear the 'Unique' rarity (r=5). */
 const UNIQUES={
   u_frostmaul:{name:'Frostmaul',line:'m',slot:'weapon',req:45,reqSkill:'attack',color:'#8fe0ff',
-    perk:'meleedmg',perkDesc:'+5% melee damage',stats:{acc:30,pow:27},spd:2400},
+    perk:'meleedmg',perkDesc:'+5% melee damage',stats:{acc:30,pow:27},spd:2000},
   u_bandit_coat:{name:"Bandit King's Coat",line:'r',slot:'body',req:45,reqSkill:'defence',color:'#caa15a',
     perk:'savearrow',perkDesc:'10% chance to save arrows',stats:{def:15,hp:22,rpow:5}},
   u_warlord_bulwark:{name:"Warlord's Bulwark",line:'m',slot:'shield',req:45,reqSkill:'defence',color:'#d0a83a',
     perk:'dmgred',perkDesc:'-5% damage taken',stats:{def:19,hp:16}},
   u_pharaoh_sceptre:{name:"Pharaoh's Sceptre",line:'g',slot:'weapon',req:45,reqSkill:'magic',color:'#7af0c9',
-    perk:'saverune',perkDesc:'10% chance to save runes',stats:{acc:28,pow:25},spd:3000},
+    perk:'saverune',perkDesc:'10% chance to save runes',stats:{acc:28,pow:25},spd:2600},
 };
 (function buildUniques(){
   for(const id in UNIQUES){const u=UNIQUES[id];
@@ -191,7 +191,7 @@ const FUSIONS={
 (function buildFusions(){
   for(const id in FUSIONS){const f=FUSIONS[id];
     GEAR[id]={id,name:f.name,line:'m',tier:6,slot:'weapon',req:f.req,reqSkill:'attack',
-      color:f.color,stats:{...f.stats},spd:2400,fusion:true,ftier:f.tier,fx:f.fx};
+      color:f.color,stats:{...f.stats},spd:2000,fusion:true,ftier:f.tier,fx:f.fx};
   }
 })();
 /* recipes: result → inputs + gold fee. Gated on Attack level (result.req). */
@@ -222,6 +222,35 @@ function weaponEffects(piece){
 }
 /* upgrade chance scales with Crafting level: ~5% @1 → ~60% @50 */
 function fuseUpgradeChance(){return 0.05+(clamp(lvl('crafting'),1,MAX_LVL)-1)/(MAX_LVL-1)*0.55;}
+
+/* ---------------- special attacks (⚡ spec energy) ----------------
+   One active special per weapon, fired from the big ⚡ button while fighting.
+   Energy 0–100 regenerates over time; every special costs SPEC_COST.
+   Fusion weapons get a signature special keyed on their FIRST effect; base &
+   unique weapons get their line's generic. Resolution: useSpecial() in p5. */
+const SPEC_MAX=100, SPEC_COST=40, SPEC_REGEN=100/45000; /* full bar in 45 s */
+const SPECIALS={
+  melee:    {name:'Power Strike', desc:'A guaranteed hit for 180% damage'},
+  ranged:   {name:'Rapid Volley', desc:'Three instant shots at 80% damage'},
+  magic:    {name:'Arcane Burst', desc:'140% hit that splashes foes near the target'},
+  poison:   {name:'Envenom',      desc:'130% hit + virulent poison'},
+  burn:     {name:'Immolate',     desc:'130% hit + fierce burn'},
+  bleed:    {name:'Rend',         desc:'130% hit + deep bleed'},
+  cleave:   {name:'Whirlwind',    desc:'Full damage to every adjacent foe'},
+  pierce:   {name:'Skewer',       desc:'A full-damage lance through 4 tiles'},
+  knockback:{name:'Ground Slam',  desc:'Damages and hurls back all adjacent foes'},
+  reach:    {name:'Great Sweep',  desc:'140% hit across the target row'},
+  crush:    {name:'Shatter',      desc:'160% hit that ignores all armour'},
+  execute:  {name:'Guillotine',   desc:'140% hit; executes below half HP'},
+  lifesteal:{name:'Drain Life',   desc:'150% hit, healing all damage dealt'},
+  slashwave:{name:'Judgement',    desc:'A full-damage blade wave plus the strike'},
+};
+function specKeyForWeapon(){
+  const w=P.gear.weapon&&GEAR[P.gear.weapon.id];
+  if(!w)return'melee';
+  if(w.fx&&w.fx.length&&SPECIALS[w.fx[0]])return w.fx[0];
+  return w.line==='r'?'ranged':w.line==='g'?'magic':'melee';
+}
 
 /* effective stats of an owned gear piece {id, r} */
 function gearStats(piece){

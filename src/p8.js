@@ -87,14 +87,20 @@ function bindInput(){
     press={sx:ev.clientX,sy:ev.clientY,tx,ty,wx,wy,timer:0};
     const drop=dropAt(P.map,tx,ty); /* long-tap a pile → itemised pickup menu */
     if(drop)press.timer=setTimeout(()=>{press=null;openFloorMenu(drop);},450);
+    /* hold-to-steer: update() (p5) starts steering after ~220 ms held */
+    HOLD.down=true;HOLD.cx=ev.clientX;HOLD.cy=ev.clientY;HOLD.t0=T;HOLD.onDrop=!!drop;HOLD.steer=false;
   });
   cv.addEventListener('pointermove',ev=>{
+    if(HOLD.down){HOLD.cx=ev.clientX;HOLD.cy=ev.clientY;}
     if(press&&(Math.abs(ev.clientX-press.sx)>12||Math.abs(ev.clientY-press.sy)>12))endPress();
   });
   cv.addEventListener('pointerup',()=>{
-    if(!press)return;const p=press;endPress();tapAt(p.tx,p.ty,p.wx,p.wy);
+    const steered=HOLD.steer;HOLD.down=false;HOLD.steer=false;
+    if(!press)return;const p=press;endPress();
+    if(steered)return; /* the hold consumed this gesture — no tap on release */
+    tapAt(p.tx,p.ty,p.wx,p.wy);
   });
-  cv.addEventListener('pointercancel',endPress);
+  cv.addEventListener('pointercancel',()=>{HOLD.down=false;HOLD.steer=false;endPress();});
   window.addEventListener('resize',resize);
 }
 

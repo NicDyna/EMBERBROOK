@@ -128,6 +128,20 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);
 .tag.gold{color:var(--gold);border:1px solid var(--border);border-radius:4px;padding:1px 5px}
 #stylebtn{font-size:18px}
 #ammo{position:fixed;left:8px;bottom:calc(64px + env(safe-area-inset-bottom));z-index:5;background:#1d1a16e6;border:2px solid var(--border);border-radius:6px;padding:4px 9px;font-size:12px;color:var(--ink);display:none}
+/* ⚡ special attack + 🍖 quick-eat (left combat cluster) */
+#bSpec{position:fixed;left:8px;bottom:calc(104px + env(safe-area-inset-bottom));z-index:5;
+  width:58px;height:58px;border-radius:50%;border:3px solid var(--border);background:#241d14ee;
+  color:var(--ink);font-size:24px;cursor:pointer;overflow:hidden;padding:0}
+#bSpec span{position:relative;z-index:2;text-shadow:0 2px 0 #000}
+#specfill{position:absolute;left:0;bottom:0;width:100%;height:100%;background:#e8b64c44;z-index:1;transition:height .2s linear}
+#bSpec.ready{border-color:var(--gold);box-shadow:0 0 12px #e8b64c88}
+#bSpec.ready #specfill{background:#e8b64c66}
+#bSpec:active{transform:scale(.93)}
+#bFood{position:fixed;left:74px;bottom:calc(110px + env(safe-area-inset-bottom));z-index:5;
+  width:46px;height:46px;border-radius:50%;border:2px solid var(--border);background:#241d14ee;
+  color:var(--ink);font-size:19px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+#bFood:active{transform:scale(.93)}
+#foodqty{position:absolute;bottom:0;right:2px;font-size:10px;color:var(--gold);text-shadow:0 1px 0 #000}
 /* minimap (toggled open) */
 #minimap{position:fixed;inset:0;z-index:9;display:none;align-items:center;justify-content:center;background:#000000aa;padding:16px}
 #minimap.open{display:flex}
@@ -166,6 +180,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);
 <div id="popdim"></div>
 <div id="itempop"><img id="itempopIcon" alt=""><div id="itempopName"></div><div id="itempopKind"></div></div>
 <div id="ammo"></div>
+<button id="bSpec" aria-label="Special attack"><div id="specfill"></div><span>⚡</span></button>
+<button id="bFood" aria-label="Quick eat" style="display:none">🍖<span id="foodqty"></span></button>
 <div id="xpwrap"><span id="xplabel"></span><div class="bar"><div id="xpfill"></div></div><span id="xpnum"></span></div>
 <div id="btns">
   <button class="hbtn" id="bInv" aria-label="Inventory">🎒</button>
@@ -190,6 +206,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);
   <div class="mmhead"><span id="mmlabel"></span><span class="mmhint">tap to close</span></div>
   <canvas id="mmcv"></canvas>
 </div></div>
-<script src="/game.js?v=3.1.1"></script>
+<script src="/game.js?v=3.2.0"></script>
 </body>
 </html>

@@ -131,15 +131,22 @@ function draw(){
         ctx.font='bold 8px monospace';ctx.textAlign='center';
         ctx.fillStyle='#f0c419';ctx.fillText(d.name,m.px+16,m.py-44);
       }else{
+        if(m.elite||d.flee){ /* gold aura: alpha elites + the treasure scarab */
+          const pulse=0.28+0.14*Math.sin(T/240);
+          ctx.globalAlpha=pulse;ctx.strokeStyle='#f0c419';ctx.lineWidth=2;
+          ctx.beginPath();ctx.arc(m.px+16,m.py+16,15,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;
+        }
         drawFlipped(SPR[m.type],mx,my,facing);
-        if(d.semi){ /* elite: name bar + wider health bar */
+        const mh=m.elite?Math.round(d.hp*1.6):d.hp;
+        if(d.semi||m.elite){ /* semi-boss or alpha elite: name bar + wide health bar */
           ctx.fillStyle='#000000aa';ctx.fillRect(m.px+2,m.py-8,28,4);
-          ctx.fillStyle='#c9584a';ctx.fillRect(m.px+3,m.py-7,26*(m.hp/d.hp),2);
+          ctx.fillStyle='#c9584a';ctx.fillRect(m.px+3,m.py-7,26*(m.hp/mh),2);
           ctx.font='bold 8px monospace';ctx.textAlign='center';
-          ctx.fillStyle='#d9a5f0';ctx.fillText(d.name,m.px+16,m.py-11);
-        }else if(m.hp<d.hp){
+          ctx.fillStyle=m.elite?'#f0c419':'#d9a5f0';
+          ctx.fillText((m.elite?'Alpha ':'')+d.name,m.px+16,m.py-11);
+        }else if(m.hp<mh){
           ctx.fillStyle='#000000aa';ctx.fillRect(m.px+6,m.py-6,20,4);
-          ctx.fillStyle='#c9584a';ctx.fillRect(m.px+7,m.py-5,18*(m.hp/d.hp),2);
+          ctx.fillStyle='#c9584a';ctx.fillRect(m.px+7,m.py-5,18*(m.hp/mh),2);
         }
       }
     }else if(it.k==='n'){
@@ -239,8 +246,37 @@ function draw(){
     ctx.fillStyle=f.color;ctx.fillText(f.txt,f.x,f.y-pr*18);
     ctx.globalAlpha=1;
   }
+  drawWeather(camx,camy);
   ctx.restore();
   if(minimapOn)drawMinimap();
+}
+/* ---------------- ambient biome weather (cosmetic, ambient RNG only) ------
+   Drifting leaves / snow / pollen / sand wisps over the four wild regions —
+   ~2 dozen 1.6px motes wrapped to the viewport; pure atmosphere, zero gameplay. */
+const WEATHER={
+  forest:   {c:['#7fb069','#5d7a33','#c9a24a'],vy:[8,18], vx:[-6,6],  n:26,sway:1},
+  mountains:{c:['#ffffff','#dbe4ee'],          vy:[10,22],vx:[-4,4],  n:34,sway:1},
+  plains:   {c:['#e6cf49','#c8b95e'],          vy:[-2,2], vx:[10,26], n:18,sway:0},
+  desert:   {c:['#e6d6a0','#cbb677'],          vy:[-3,3], vx:[18,40], n:22,sway:0},
+};
+let wparts=[],wmap='';
+function drawWeather(camx,camy){
+  const cfg=WEATHER[P.map];
+  if(!cfg){if(wparts.length){wparts=[];wmap='';}return;}
+  const vw=VW/SCALE,vh=VH/SCALE;
+  if(wmap!==P.map){wmap=P.map;wparts=[];
+    for(let i=0;i<cfg.n;i++)wparts.push({
+      x:camx+ambRand(0,vw|0),y:camy+ambRand(0,vh|0),
+      vx:ambRand(cfg.vx[0],cfg.vx[1]),vy:ambRand(cfg.vy[0],cfg.vy[1]),
+      c:cfg.c[i%cfg.c.length],ph:ambRand(0,628)/100});}
+  for(const p of wparts){
+    p.x+=p.vx*FRAME_DT/1000;p.y+=p.vy*FRAME_DT/1000;
+    const sx=p.x+(cfg.sway?Math.sin(T/700+p.ph)*3:0),sy=p.y;
+    if(sx<camx-8)p.x+=vw+16; if(sx>camx+vw+8)p.x-=vw+16;
+    if(sy<camy-8)p.y+=vh+16; if(sy>camy+vh+8)p.y-=vh+16;
+    ctx.globalAlpha=0.5;ctx.fillStyle=p.c;ctx.fillRect(sx,sy,1.6,1.6);
+  }
+  ctx.globalAlpha=1;
 }
 function drawFlipped(spr,x,y,facing){
   if(facing<0){ctx.save();ctx.translate(x+32,y);ctx.scale(-1,1);ctx.drawImage(spr,0,0);ctx.restore();}
@@ -276,7 +312,19 @@ function updateHUD(){
     if(am){if(a){am.style.display='';am.textContent=(a==='arrows'?'➶ ':'✦ ')+ammo;}
       else am.style.display='none';}
   }
-  _hud={hp:P.hp,mh,gold:P.gold,mode,style:P.style,a,ammo};
+  /* ⚡ special energy (fill from the bottom; glows when an use is banked) */
+  const spec=Math.round(P.spec==null?SPEC_MAX:P.spec);
+  if(spec!==_hud.spec){
+    const bs=$('bSpec');
+    if(bs){$('specfill').style.height=spec+'%';bs.classList.toggle('ready',spec>=SPEC_COST);}
+  }
+  /* 🍖 quick-eat (hidden when the bag holds no food) */
+  const food=foodCount();
+  if(food!==_hud.food){
+    const bf=$('bFood');
+    if(bf){bf.style.display=food>0?'':'none';$('foodqty').textContent=food;}
+  }
+  _hud={hp:P.hp,mh,gold:P.gold,mode,style:P.style,a,ammo,spec,food};
 }
 
 /* ---------------- minimap (toggle open, redrawn while visible) ---------- */
@@ -308,7 +356,8 @@ function drawMinimap(){
   for(const e of W.exits){g.fillStyle='#7fbf5f';g.fillRect(e.x*cell-1,e.y*cell-1,cell+2,cell+2);}
   for(const n of W.npcs){g.fillStyle='#e8b64c';g.fillRect(n.x*cell-1,n.y*cell-1,cell+2,cell+2);}
   for(const m of W.mobs){if(!m.alive)continue;
-    g.fillStyle=MOBS[m.type].boss?'#f0c419':'#c9584a';g.fillRect(m.tx*cell,m.ty*cell,cell,cell);}
+    g.fillStyle=(MOBS[m.type].boss||MOBS[m.type].flee)?'#f0c419':m.elite?'#ff8a3a':'#c9584a';
+    g.fillRect(m.tx*cell,m.ty*cell,cell,cell);}
   g.fillStyle='#0d0b08';g.fillRect(P.tx*cell-2,P.ty*cell-2,cell+4,cell+4);
   g.fillStyle='#66e0ff';g.fillRect(P.tx*cell-1,P.ty*cell-1,cell+2,cell+2);
   $('mmlabel').textContent=MAPS[P.map].name;

@@ -8,6 +8,7 @@ function freshPlayer(){return{
   hp:14,
   xp:{attack:0,strength:0,defence:0,ranged:0,magic:0,woodcutting:0,mining:0,crafting:0},
   style:'accurate', // melee training style: accurate|aggressive|defensive
+  spec:SPEC_MAX,     // special-attack energy 0–100 (⚡ button)
   gold:0,
   inv:[],            // [{id,qty}] for stackables, [{gear:{id,r}}] for gear
   bank:{},           // stackables only: id -> qty
@@ -147,6 +148,19 @@ function addGear(piece){ // {id,r} one slot each
   P.inv.push({gear:{id:piece.id,r:piece.r||0}});return true;
 }
 function addGold(n){P.gold+=n;dailyEvent('gold',null,n);updateHUD();}
+/* quick-eat picker: the food whose heal best fits the missing HP (largest heal
+   that doesn't overheal; if everything overheals, the smallest). -1 = no food. */
+function bestFoodIndex(){
+  const missing=maxHp()-P.hp;
+  let fit=-1,fitHeal=0,small=-1,smallHeal=1e9;
+  P.inv.forEach((s,i)=>{
+    if(s.gear)return;const d=ITEMS[s.id];if(!d||!d.heal)return;
+    if(d.heal<=missing&&d.heal>fitHeal){fit=i;fitHeal=d.heal;}
+    if(d.heal<smallHeal){small=i;smallHeal=d.heal;}
+  });
+  return fit>=0?fit:small;
+}
+function foodCount(){return P.inv.reduce((a,s)=>a+((!s.gear&&ITEMS[s.id]&&ITEMS[s.id].heal)?s.qty:0),0);}
 
 /* ---------------- equipment ---------------- */
 function canEquip(piece){
@@ -418,6 +432,7 @@ function sfx(kind){
     case'coin':beep(700,.05,'triangle',.04);beep(880,.06,'triangle',.03,.04);break;
     case'die':beep(200,.2,'sawtooth',.06);beep(150,.25,'sawtooth',.05,.15);beep(100,.35,'sawtooth',.05,.3);break;
     case'warp':beep(440,.08,'sine',.05);beep(660,.1,'sine',.05,.07);beep(880,.14,'sine',.04,.15);break;
+    case'spec':beep(300,.06,'square',.06);beep(450,.08,'square',.06,.05);beep(700,.12,'sawtooth',.05,.11);break;
   }
 }
 /* ---- subtle biome ambient pad (very low volume; follows the sound toggle) ---- */

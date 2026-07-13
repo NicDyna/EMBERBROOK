@@ -20,7 +20,14 @@ Attack, Strength, Defence, Ranged, Magic, Woodcutting, Mining.
   gearDef·1.2 + 8.
 - Max hit from the power skill + weapon power (+ leather/cloth line bonuses
   for Ranged/Magic).
-- Weapon speeds: melee 2400 ms, bow/staff 3000 ms.
+- Weapon speeds: melee 2000 ms, bow/staff 2600 ms (v3.2 pacing pass; fodder
+  HP −20% to match — more kills/drops per minute).
+- **Special attacks (⚡, v3.2):** energy 0–100 regenerating to full in 45 s;
+  every special costs 40. One big HUD button; guaranteed-hit signature moves
+  per weapon — fusion weapons key on their first effect (Boar Cleaver →
+  Whirlwind, Tremor Maul → Ground Slam…), base melee = Power Strike 180%,
+  bow = Rapid Volley ×3, staff = Arcane Burst splash. Table: `SPECIALS` (p1),
+  resolver `useSpecial()` (p5).
 - Ranges: melee 1, bow 4, staff 5 tiles. Ranged/magic attackers hold
   position at range; mobs with ranged/magic styles do the same.
 - Combat triangle: melee > ranged > magic > melee. Advantage = ×1.18 damage
@@ -29,7 +36,8 @@ Attack, Strength, Defence, Ranged, Magic, Woodcutting, Mining.
 - Ammo: bows consume Arrows, staves consume Runes (stackables, shop-bought).
   Out of ammo stops the attack. Low-ammo warning at 50.
 - Healing: food only (Bread 6 / Cooked Meat 8 / Meat Pie 14 / Stew 22, with
-  a 1.2 s attack delay after eating) plus slow out-of-combat regen
+  a 0.9 s attack delay after eating) via the 🍖 quick-eat HUD button (picks
+  the food that best fits the missing HP) plus slow out-of-combat regen
   (1 HP / 3 s after 4 s unhurt). Base HP is flat 14; the rest comes from gear
   (armour HP scales with tier). New heroes start with a bronze weapon + body +
   legs so the first region is survivable.
@@ -89,6 +97,19 @@ Bosses: big 2× sprites, ~5-min respawns, 2 loot rolls + rarity boost.
 Semi-bosses: elites (double loot roll + rarity boost, 2-min respawn).
 Fast travel (🏠): home to town + any region reached on foot, blocked while a
 mob is attacking you; dungeons are entered from inside their region.
+
+## Living world (v3.2)
+- **Movement:** tap-to-move plus **hold-to-steer** — press & hold and the hero
+  walks continuously toward the pointer (greedy 8-dir, corner-guarded).
+- **Alpha elites:** ~4% of fodder respawns come back as a gold-aura'd "Alpha"
+  (1.6× HP, +30% damage, double XP, three loot rolls). Ambient RNG only.
+- **Events** every 2.5–5 min in the wilds (`rollWorldEvent`, ambient RNG):
+  ☄️ meteor (3 rich region-appropriate ore nodes, 4 charges, 3-min expiry) ·
+  ⚔️ ambush (2–3 aggroed fodder leap in) · ✨ Gilded Scarab (fleeing treasure
+  critter, 45 s to catch; bursts with gold + gems). Event mobs/nodes are
+  runtime-only (never saved).
+- **Biome weather:** drifting leaves / snow / pollen / sand-wisp motes per
+  region — pure atmosphere, ambient RNG.
 
 ## Retention & goals
 - 7 linear quests (the last four clear each region's dungeon boss, ending

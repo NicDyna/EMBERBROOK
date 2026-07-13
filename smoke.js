@@ -38,6 +38,9 @@ setTimeout(()=>{
   const EB=w.EB;
   const tick=ms=>{for(let i=0;i<ms/50;i++)EB.update(50);};
   const tp=(map,x,y)=>{EB.P.map=map;EB.P.tx=x;EB.P.ty=y;EB.P.px=x*32;EB.P.py=y*32;EB.P.path=[];EB.P.moving=null;EB.P.action=null;};
+  /* living-world events fire on a wall-clock-ish timer — disable them so no
+     ambush/meteor lands mid-assertion (the systems get their own tests below) */
+  w.eval('EVT.next=Infinity');
 
   /* ---------- boot ---------- */
   ok(EB.P&&EB.P.map==='town','booted in town at '+EB.P.tx+','+EB.P.ty);
@@ -358,6 +361,43 @@ setTimeout(()=>{
   EB.applySave({v:2,map:'town',tx:20,ty:17,px:640,py:544,xp:{attack:100,woodcutting:500},stats:{}});
   ok(EB.P.xp.crafting===0&&w.eval('lvl("crafting")')===1,'v2 save migrates: Crafting defaults to level 1');
   ok(w.eval('totalLevel()')===w.eval('SKILL_ORDER.reduce((a,s)=>a+lvl(s),0)'),'total level counts all 8 skills');
+
+  /* ---------- v3.2: special attacks (⚡) ---------- */
+  EB.P.xp.attack=w.eval('xpAt(30)');EB.P.xp.strength=w.eval('xpAt(30)');
+  EB.P.gear.weapon={id:'g_m_3_weapon',r:0};EB.P.spec=100;EB.P.hp=EB.maxHp();
+  EB.world.forest.mobs.forEach(m=>{m.aggro=false;m.wanderT=1e12;});
+  const spm=EB.world.forest.mobs.find(m=>m.type==='spider');
+  spm.alive=true;spm.hp=60;spm.elite=false;spm.tx=30;spm.ty=20;spm.px=960;spm.py=640;spm.moving=null;
+  tp('forest',30,21);EB.P.action={kind:'fight',target:spm.id};
+  w.eval('useSpecial()');
+  ok(spm.hp<60&&EB.P.spec===60,'special hit for '+(60-spm.hp)+' and cost 40 energy');
+  EB.P.spec=10;const hpBefore=spm.hp;w.eval('useSpecial()');
+  ok(spm.hp===hpBefore&&EB.P.spec===10,'special blocked below the energy cost');
+  ok(w.eval('specKeyForWeapon()')==='melee','base sword special = Power Strike');
+  EB.P.gear.weapon={id:'fw_boarcleaver',r:0};
+  ok(w.eval('specKeyForWeapon()')==='cleave','fusion special keys on its effect');
+
+  /* ---------- v3.2: quick-eat picker ---------- */
+  EB.P.inv=[];EB.addItem('bread',2);EB.addItem('stew',2); // heals 6 / 22
+  EB.P.hp=EB.maxHp()-8;
+  ok(EB.P.inv[w.eval('bestFoodIndex()')].id==='bread','quick-eat picks the best fit (bread for -8)');
+  EB.P.hp=Math.max(1,EB.maxHp()-30);
+  ok(EB.P.inv[w.eval('bestFoodIndex()')].id==='stew','quick-eat picks stew for a deep wound');
+  ok(w.eval('foodCount()')===4,'food counter sums the bag');
+
+  /* ---------- v3.2: living world ---------- */
+  tp('forest',30,21);
+  w.eval('evtScarab(world.forest)');
+  const scarab=EB.world.forest.mobs.find(m=>m.type==='gilded_scarab'&&m.alive);
+  ok(!!scarab,'scarab event spawns the critter');
+  if(scarab){scarab.alive=false;tick(100);
+    ok(!EB.world.forest.mobs.includes(scarab),'temp mobs are removed once dead');}
+  w.eval('evtMeteor(world.forest)');
+  const evtNodes=EB.world.forest.res.filter(r=>r.temp);
+  ok(evtNodes.length>0&&evtNodes[0].type==='I','meteor drops iron nodes in the forest');
+  evtNodes.forEach(r=>r.expireAt=0);tick(100);
+  ok(EB.world.forest.res.every(r=>!r.temp),'expired meteor nodes clean up');
+  ok(w.eval("MOBS.spider.hp")===10&&w.eval("GEAR.g_m_6_weapon.spd")===2000,'v3.2 pacing values live');
 
   console.log(fails? '\n'+fails+' FAILURES':'\nALL TESTS PASSED');
   process.exit(fails?1:0);

@@ -46,60 +46,66 @@ function lootRoll(table){
    roll + rarity boost, faster respawn). Both live inside dungeons. */
 const MOBS={
   /* ===== Dense Forest — Whisperwood (lvl 3–12) ===== */
-  spider:{name:'Forest Spider',lvl:4,hp:12,style:'melee',acc:7,pow:4,def:3,spd:2400,range:1,
+  spider:{name:'Forest Spider',lvl:4,hp:10,style:'melee',acc:7,pow:4,def:3,spd:2400,range:1,
     aggro:false,xp:24,gold:[2,7],
     loot:[{w:48,gold:[2,7]},{w:20,item:'bone',q:[1,1]},{w:12,item:'bread',q:[1,1]},
           {w:10,gear:{tierMin:1,tierMax:2}},{w:10,item:'cooked_meat',q:[1,1]},{w:12,item:'spider_silk',q:[1,2]}]},
-  boar:{name:'Wild Boar',lvl:6,hp:16,style:'melee',acc:8,pow:5,def:4,spd:2400,range:1,
+  boar:{name:'Wild Boar',lvl:6,hp:13,style:'melee',acc:8,pow:5,def:4,spd:2400,range:1,
     aggro:true,xp:34,gold:[0,4],
     loot:[{w:44,item:'wolf_pelt',q:[1,1]},{w:24,item:'cooked_meat',q:[1,2]},
           {w:20,item:'bone',q:[1,2]},{w:12,gear:{tierMin:1,tierMax:2}}]},
-  bandit:{name:'Forest Bandit',lvl:9,hp:22,style:'ranged',acc:11,pow:6,def:5,spd:2800,range:4,
+  bandit:{name:'Forest Bandit',lvl:9,hp:18,style:'ranged',acc:11,pow:6,def:5,spd:2800,range:4,
     aggro:true,xp:46,gold:[6,16],
     loot:[{w:34,gold:[6,16]},{w:22,item:'arrows',q:[6,14]},{w:16,item:'bread',q:[1,2]},
           {w:16,gear:{tierMin:1,tierMax:2}},{w:12,item:'copper_ore',q:[1,1]}]},
 
   /* ===== Frostpeak Mountains — snow (lvl 14–24) ===== */
-  frost_wolf:{name:'Frost Wolf',lvl:15,hp:40,style:'melee',acc:16,pow:11,def:10,spd:2100,range:1,
+  frost_wolf:{name:'Frost Wolf',lvl:15,hp:32,style:'melee',acc:16,pow:11,def:10,spd:2100,range:1,
     aggro:true,xp:72,gold:[4,12],
     loot:[{w:40,item:'wolf_pelt',q:[1,2]},{w:24,item:'cooked_meat',q:[1,2]},
           {w:18,item:'bone',q:[1,3]},{w:18,gear:{tierMin:2,tierMax:3}},{w:16,item:'thick_fur',q:[1,2]}]},
-  ice_sprite:{name:'Ice Sprite',lvl:18,hp:36,style:'magic',acc:19,pow:13,def:10,spd:2800,range:4,
+  ice_sprite:{name:'Ice Sprite',lvl:18,hp:29,style:'magic',acc:19,pow:13,def:10,spd:2800,range:4,
     aggro:true,xp:92,gold:[8,20],
     loot:[{w:30,gold:[8,20]},{w:24,item:'runes',q:[6,16]},{w:18,item:'gem',q:[1,1]},
           {w:18,gear:{tierMin:2,tierMax:4}},{w:10,item:'meat_pie',q:[1,1]}]},
-  snow_troll:{name:'Snow Troll',lvl:20,hp:56,style:'melee',acc:20,pow:13,def:15,spd:2800,range:1,
+  snow_troll:{name:'Snow Troll',lvl:20,hp:45,style:'melee',acc:20,pow:13,def:15,spd:2800,range:1,
     aggro:true,xp:130,gold:[10,26],
     loot:[{w:30,gold:[10,26]},{w:22,item:'iron_ore',q:[1,2]},{w:20,gear:{tierMin:3,tierMax:4}},
           {w:16,item:'bone',q:[2,4]},{w:12,item:'gem',q:[1,1]}]},
 
   /* ===== Golden Plains — savanna (lvl 26–36) ===== */
-  steppe_lion:{name:'Steppe Lion',lvl:26,hp:74,style:'melee',acc:25,pow:16,def:16,spd:2200,range:1,
+  steppe_lion:{name:'Steppe Lion',lvl:26,hp:59,style:'melee',acc:25,pow:16,def:16,spd:2200,range:1,
     aggro:true,xp:150,gold:[12,30],
     loot:[{w:34,item:'wolf_pelt',q:[1,3]},{w:24,item:'cooked_meat',q:[2,3]},
           {w:20,gear:{tierMin:3,tierMax:4}},{w:12,item:'gem',q:[1,1]},{w:10,item:'meat_pie',q:[1,1]},{w:14,item:'lion_fang',q:[1,2]}]},
-  war_hawk:{name:'War Hawk',lvl:30,hp:58,style:'ranged',acc:28,pow:18,def:15,spd:2600,range:4,
+  war_hawk:{name:'War Hawk',lvl:30,hp:46,style:'ranged',acc:28,pow:18,def:15,spd:2600,range:4,
     aggro:true,xp:176,gold:[14,34],
     loot:[{w:30,gold:[14,34]},{w:26,item:'arrows',q:[12,28]},{w:20,gear:{tierMin:3,tierMax:5}},
           {w:14,item:'gem',q:[1,1]},{w:10,item:'stew',q:[1,1]}]},
-  nomad:{name:'Steppe Nomad',lvl:34,hp:82,style:'magic',acc:34,pow:22,def:22,spd:2800,range:4,
+  nomad:{name:'Steppe Nomad',lvl:34,hp:66,style:'magic',acc:34,pow:22,def:22,spd:2800,range:4,
     aggro:true,xp:212,gold:[18,44],
     loot:[{w:28,gold:[18,44]},{w:24,item:'runes',q:[12,26]},{w:20,gear:{tierMin:4,tierMax:5}},
           {w:16,item:'ancient_dust',q:[1,2]},{w:12,item:'gem',q:[1,2]}]},
 
   /* ===== Ashen Desert — dunes (lvl 38–49) ===== */
-  scorpion:{name:'Sand Scorpion',lvl:38,hp:80,style:'melee',acc:34,pow:20,def:20,spd:2400,range:1,
+  scorpion:{name:'Sand Scorpion',lvl:38,hp:64,style:'melee',acc:34,pow:20,def:20,spd:2400,range:1,
     aggro:true,xp:212,gold:[16,40],
     loot:[{w:30,gold:[16,40]},{w:24,item:'gem',q:[1,2]},{w:20,gear:{tierMin:4,tierMax:5}},
           {w:14,item:'bone',q:[2,4]},{w:12,item:'stew',q:[1,1]},{w:16,item:'scarab_shell',q:[1,2]}]},
-  sand_wraith:{name:'Sand Wraith',lvl:42,hp:86,style:'magic',acc:40,pow:26,def:24,spd:2800,range:4,
+  sand_wraith:{name:'Sand Wraith',lvl:42,hp:69,style:'magic',acc:40,pow:26,def:24,spd:2800,range:4,
     aggro:true,xp:250,gold:[20,50],
     loot:[{w:28,gold:[20,50]},{w:24,item:'runes',q:[14,30]},{w:20,item:'ancient_dust',q:[1,3]},
           {w:18,gear:{tierMin:4,tierMax:6}},{w:10,item:'gem',q:[1,2]}]},
-  dune_raider:{name:'Dune Raider',lvl:44,hp:86,style:'ranged',acc:42,pow:25,def:23,spd:2600,range:4,
+  dune_raider:{name:'Dune Raider',lvl:44,hp:69,style:'ranged',acc:42,pow:25,def:23,spd:2600,range:4,
     aggro:true,xp:280,gold:[24,56],
     loot:[{w:28,gold:[24,56]},{w:24,item:'arrows',q:[18,40]},{w:20,gear:{tierMin:5,tierMax:6}},
           {w:16,item:'gem',q:[1,2]},{w:12,item:'stew',q:[1,2]}]},
+
+  /* ===== event creature: a fleeing treasure critter (never placed in maps;
+     spawned by the living-world event roller in p5, despawns if not caught) ===== */
+  gilded_scarab:{name:'Gilded Scarab',lvl:1,hp:1,style:'melee',acc:0,pow:0,def:1,spd:99999,range:1,
+    aggro:false,xp:60,gold:[0,0],flee:true,
+    loot:[{w:55,gold:[80,220]},{w:30,item:'gem',q:[1,2]},{w:15,gold:[200,400]}]},
 
   /* ===== Dungeon semi-bosses (elite: double loot + rarity boost) ===== */
   spider_matron:{name:'Spider Matron',lvl:14,hp:70,style:'melee',acc:16,pow:11,def:10,spd:2500,range:1,

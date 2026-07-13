@@ -86,7 +86,7 @@ const GEAR={};
                  reqSkill:ld.reqSkill[slot],color:ld.metal[t-1].trim(),stats:{}};
         if(slot==='weapon'){
           g.stats.acc=3+4*t; g.stats.pow=2+3*t;
-          g.spd = L==='m'?2400:3000;
+          g.spd = L==='m'?2000:2600; /* v3.2 pacing: snappier swings across the board */
           if(L==='r')g.ammo='arrows';
           if(L==='g')g.ammo='runes';
         }else{
@@ -110,13 +110,13 @@ const GEAR={};
    drop only from their boss and wear the 'Unique' rarity (r=5). */
 const UNIQUES={
   u_frostmaul:{name:'Frostmaul',line:'m',slot:'weapon',req:45,reqSkill:'attack',color:'#8fe0ff',
-    perk:'meleedmg',perkDesc:'+5% melee damage',stats:{acc:30,pow:27},spd:2400},
+    perk:'meleedmg',perkDesc:'+5% melee damage',stats:{acc:30,pow:27},spd:2000},
   u_bandit_coat:{name:"Bandit King's Coat",line:'r',slot:'body',req:45,reqSkill:'defence',color:'#caa15a',
     perk:'savearrow',perkDesc:'10% chance to save arrows',stats:{def:15,hp:22,rpow:5}},
   u_warlord_bulwark:{name:"Warlord's Bulwark",line:'m',slot:'shield',req:45,reqSkill:'defence',color:'#d0a83a',
     perk:'dmgred',perkDesc:'-5% damage taken',stats:{def:19,hp:16}},
   u_pharaoh_sceptre:{name:"Pharaoh's Sceptre",line:'g',slot:'weapon',req:45,reqSkill:'magic',color:'#7af0c9',
-    perk:'saverune',perkDesc:'10% chance to save runes',stats:{acc:28,pow:25},spd:3000},
+    perk:'saverune',perkDesc:'10% chance to save runes',stats:{acc:28,pow:25},spd:2600},
 };
 (function buildUniques(){
   for(const id in UNIQUES){const u=UNIQUES[id];
@@ -191,7 +191,7 @@ const FUSIONS={
 (function buildFusions(){
   for(const id in FUSIONS){const f=FUSIONS[id];
     GEAR[id]={id,name:f.name,line:'m',tier:6,slot:'weapon',req:f.req,reqSkill:'attack',
-      color:f.color,stats:{...f.stats},spd:2400,fusion:true,ftier:f.tier,fx:f.fx};
+      color:f.color,stats:{...f.stats},spd:2000,fusion:true,ftier:f.tier,fx:f.fx};
   }
 })();
 /* recipes: result → inputs + gold fee. Gated on Attack level (result.req). */
@@ -222,6 +222,35 @@ function weaponEffects(piece){
 }
 /* upgrade chance scales with Crafting level: ~5% @1 → ~60% @50 */
 function fuseUpgradeChance(){return 0.05+(clamp(lvl('crafting'),1,MAX_LVL)-1)/(MAX_LVL-1)*0.55;}
+
+/* ---------------- special attacks (⚡ spec energy) ----------------
+   One active special per weapon, fired from the big ⚡ button while fighting.
+   Energy 0–100 regenerates over time; every special costs SPEC_COST.
+   Fusion weapons get a signature special keyed on their FIRST effect; base &
+   unique weapons get their line's generic. Resolution: useSpecial() in p5. */
+const SPEC_MAX=100, SPEC_COST=40, SPEC_REGEN=100/45000; /* full bar in 45 s */
+const SPECIALS={
+  melee:    {name:'Power Strike', desc:'A guaranteed hit for 180% damage'},
+  ranged:   {name:'Rapid Volley', desc:'Three instant shots at 80% damage'},
+  magic:    {name:'Arcane Burst', desc:'140% hit that splashes foes near the target'},
+  poison:   {name:'Envenom',      desc:'130% hit + virulent poison'},
+  burn:     {name:'Immolate',     desc:'130% hit + fierce burn'},
+  bleed:    {name:'Rend',         desc:'130% hit + deep bleed'},
+  cleave:   {name:'Whirlwind',    desc:'Full damage to every adjacent foe'},
+  pierce:   {name:'Skewer',       desc:'A full-damage lance through 4 tiles'},
+  knockback:{name:'Ground Slam',  desc:'Damages and hurls back all adjacent foes'},
+  reach:    {name:'Great Sweep',  desc:'140% hit across the target row'},
+  crush:    {name:'Shatter',      desc:'160% hit that ignores all armour'},
+  execute:  {name:'Guillotine',   desc:'140% hit; executes below half HP'},
+  lifesteal:{name:'Drain Life',   desc:'150% hit, healing all damage dealt'},
+  slashwave:{name:'Judgement',    desc:'A full-damage blade wave plus the strike'},
+};
+function specKeyForWeapon(){
+  const w=P.gear.weapon&&GEAR[P.gear.weapon.id];
+  if(!w)return'melee';
+  if(w.fx&&w.fx.length&&SPECIALS[w.fx[0]])return w.fx[0];
+  return w.line==='r'?'ranged':w.line==='g'?'magic':'melee';
+}
 
 /* effective stats of an owned gear piece {id, r} */
 function gearStats(piece){
@@ -396,60 +425,66 @@ function lootRoll(table){
    roll + rarity boost, faster respawn). Both live inside dungeons. */
 const MOBS={
   /* ===== Dense Forest — Whisperwood (lvl 3–12) ===== */
-  spider:{name:'Forest Spider',lvl:4,hp:12,style:'melee',acc:7,pow:4,def:3,spd:2400,range:1,
+  spider:{name:'Forest Spider',lvl:4,hp:10,style:'melee',acc:7,pow:4,def:3,spd:2400,range:1,
     aggro:false,xp:24,gold:[2,7],
     loot:[{w:48,gold:[2,7]},{w:20,item:'bone',q:[1,1]},{w:12,item:'bread',q:[1,1]},
           {w:10,gear:{tierMin:1,tierMax:2}},{w:10,item:'cooked_meat',q:[1,1]},{w:12,item:'spider_silk',q:[1,2]}]},
-  boar:{name:'Wild Boar',lvl:6,hp:16,style:'melee',acc:8,pow:5,def:4,spd:2400,range:1,
+  boar:{name:'Wild Boar',lvl:6,hp:13,style:'melee',acc:8,pow:5,def:4,spd:2400,range:1,
     aggro:true,xp:34,gold:[0,4],
     loot:[{w:44,item:'wolf_pelt',q:[1,1]},{w:24,item:'cooked_meat',q:[1,2]},
           {w:20,item:'bone',q:[1,2]},{w:12,gear:{tierMin:1,tierMax:2}}]},
-  bandit:{name:'Forest Bandit',lvl:9,hp:22,style:'ranged',acc:11,pow:6,def:5,spd:2800,range:4,
+  bandit:{name:'Forest Bandit',lvl:9,hp:18,style:'ranged',acc:11,pow:6,def:5,spd:2800,range:4,
     aggro:true,xp:46,gold:[6,16],
     loot:[{w:34,gold:[6,16]},{w:22,item:'arrows',q:[6,14]},{w:16,item:'bread',q:[1,2]},
           {w:16,gear:{tierMin:1,tierMax:2}},{w:12,item:'copper_ore',q:[1,1]}]},
 
   /* ===== Frostpeak Mountains — snow (lvl 14–24) ===== */
-  frost_wolf:{name:'Frost Wolf',lvl:15,hp:40,style:'melee',acc:16,pow:11,def:10,spd:2100,range:1,
+  frost_wolf:{name:'Frost Wolf',lvl:15,hp:32,style:'melee',acc:16,pow:11,def:10,spd:2100,range:1,
     aggro:true,xp:72,gold:[4,12],
     loot:[{w:40,item:'wolf_pelt',q:[1,2]},{w:24,item:'cooked_meat',q:[1,2]},
           {w:18,item:'bone',q:[1,3]},{w:18,gear:{tierMin:2,tierMax:3}},{w:16,item:'thick_fur',q:[1,2]}]},
-  ice_sprite:{name:'Ice Sprite',lvl:18,hp:36,style:'magic',acc:19,pow:13,def:10,spd:2800,range:4,
+  ice_sprite:{name:'Ice Sprite',lvl:18,hp:29,style:'magic',acc:19,pow:13,def:10,spd:2800,range:4,
     aggro:true,xp:92,gold:[8,20],
     loot:[{w:30,gold:[8,20]},{w:24,item:'runes',q:[6,16]},{w:18,item:'gem',q:[1,1]},
           {w:18,gear:{tierMin:2,tierMax:4}},{w:10,item:'meat_pie',q:[1,1]}]},
-  snow_troll:{name:'Snow Troll',lvl:20,hp:56,style:'melee',acc:20,pow:13,def:15,spd:2800,range:1,
+  snow_troll:{name:'Snow Troll',lvl:20,hp:45,style:'melee',acc:20,pow:13,def:15,spd:2800,range:1,
     aggro:true,xp:130,gold:[10,26],
     loot:[{w:30,gold:[10,26]},{w:22,item:'iron_ore',q:[1,2]},{w:20,gear:{tierMin:3,tierMax:4}},
           {w:16,item:'bone',q:[2,4]},{w:12,item:'gem',q:[1,1]}]},
 
   /* ===== Golden Plains — savanna (lvl 26–36) ===== */
-  steppe_lion:{name:'Steppe Lion',lvl:26,hp:74,style:'melee',acc:25,pow:16,def:16,spd:2200,range:1,
+  steppe_lion:{name:'Steppe Lion',lvl:26,hp:59,style:'melee',acc:25,pow:16,def:16,spd:2200,range:1,
     aggro:true,xp:150,gold:[12,30],
     loot:[{w:34,item:'wolf_pelt',q:[1,3]},{w:24,item:'cooked_meat',q:[2,3]},
           {w:20,gear:{tierMin:3,tierMax:4}},{w:12,item:'gem',q:[1,1]},{w:10,item:'meat_pie',q:[1,1]},{w:14,item:'lion_fang',q:[1,2]}]},
-  war_hawk:{name:'War Hawk',lvl:30,hp:58,style:'ranged',acc:28,pow:18,def:15,spd:2600,range:4,
+  war_hawk:{name:'War Hawk',lvl:30,hp:46,style:'ranged',acc:28,pow:18,def:15,spd:2600,range:4,
     aggro:true,xp:176,gold:[14,34],
     loot:[{w:30,gold:[14,34]},{w:26,item:'arrows',q:[12,28]},{w:20,gear:{tierMin:3,tierMax:5}},
           {w:14,item:'gem',q:[1,1]},{w:10,item:'stew',q:[1,1]}]},
-  nomad:{name:'Steppe Nomad',lvl:34,hp:82,style:'magic',acc:34,pow:22,def:22,spd:2800,range:4,
+  nomad:{name:'Steppe Nomad',lvl:34,hp:66,style:'magic',acc:34,pow:22,def:22,spd:2800,range:4,
     aggro:true,xp:212,gold:[18,44],
     loot:[{w:28,gold:[18,44]},{w:24,item:'runes',q:[12,26]},{w:20,gear:{tierMin:4,tierMax:5}},
           {w:16,item:'ancient_dust',q:[1,2]},{w:12,item:'gem',q:[1,2]}]},
 
   /* ===== Ashen Desert — dunes (lvl 38–49) ===== */
-  scorpion:{name:'Sand Scorpion',lvl:38,hp:80,style:'melee',acc:34,pow:20,def:20,spd:2400,range:1,
+  scorpion:{name:'Sand Scorpion',lvl:38,hp:64,style:'melee',acc:34,pow:20,def:20,spd:2400,range:1,
     aggro:true,xp:212,gold:[16,40],
     loot:[{w:30,gold:[16,40]},{w:24,item:'gem',q:[1,2]},{w:20,gear:{tierMin:4,tierMax:5}},
           {w:14,item:'bone',q:[2,4]},{w:12,item:'stew',q:[1,1]},{w:16,item:'scarab_shell',q:[1,2]}]},
-  sand_wraith:{name:'Sand Wraith',lvl:42,hp:86,style:'magic',acc:40,pow:26,def:24,spd:2800,range:4,
+  sand_wraith:{name:'Sand Wraith',lvl:42,hp:69,style:'magic',acc:40,pow:26,def:24,spd:2800,range:4,
     aggro:true,xp:250,gold:[20,50],
     loot:[{w:28,gold:[20,50]},{w:24,item:'runes',q:[14,30]},{w:20,item:'ancient_dust',q:[1,3]},
           {w:18,gear:{tierMin:4,tierMax:6}},{w:10,item:'gem',q:[1,2]}]},
-  dune_raider:{name:'Dune Raider',lvl:44,hp:86,style:'ranged',acc:42,pow:25,def:23,spd:2600,range:4,
+  dune_raider:{name:'Dune Raider',lvl:44,hp:69,style:'ranged',acc:42,pow:25,def:23,spd:2600,range:4,
     aggro:true,xp:280,gold:[24,56],
     loot:[{w:28,gold:[24,56]},{w:24,item:'arrows',q:[18,40]},{w:20,gear:{tierMin:5,tierMax:6}},
           {w:16,item:'gem',q:[1,2]},{w:12,item:'stew',q:[1,2]}]},
+
+  /* ===== event creature: a fleeing treasure critter (never placed in maps;
+     spawned by the living-world event roller in p5, despawns if not caught) ===== */
+  gilded_scarab:{name:'Gilded Scarab',lvl:1,hp:1,style:'melee',acc:0,pow:0,def:1,spd:99999,range:1,
+    aggro:false,xp:60,gold:[0,0],flee:true,
+    loot:[{w:55,gold:[80,220]},{w:30,item:'gem',q:[1,2]},{w:15,gold:[200,400]}]},
 
   /* ===== Dungeon semi-bosses (elite: double loot + rarity boost) ===== */
   spider_matron:{name:'Spider Matron',lvl:14,hp:70,style:'melee',acc:16,pow:11,def:10,spd:2500,range:1,
@@ -802,6 +837,7 @@ function freshPlayer(){return{
   hp:14,
   xp:{attack:0,strength:0,defence:0,ranged:0,magic:0,woodcutting:0,mining:0,crafting:0},
   style:'accurate', // melee training style: accurate|aggressive|defensive
+  spec:SPEC_MAX,     // special-attack energy 0–100 (⚡ button)
   gold:0,
   inv:[],            // [{id,qty}] for stackables, [{gear:{id,r}}] for gear
   bank:{},           // stackables only: id -> qty
@@ -941,6 +977,19 @@ function addGear(piece){ // {id,r} one slot each
   P.inv.push({gear:{id:piece.id,r:piece.r||0}});return true;
 }
 function addGold(n){P.gold+=n;dailyEvent('gold',null,n);updateHUD();}
+/* quick-eat picker: the food whose heal best fits the missing HP (largest heal
+   that doesn't overheal; if everything overheals, the smallest). -1 = no food. */
+function bestFoodIndex(){
+  const missing=maxHp()-P.hp;
+  let fit=-1,fitHeal=0,small=-1,smallHeal=1e9;
+  P.inv.forEach((s,i)=>{
+    if(s.gear)return;const d=ITEMS[s.id];if(!d||!d.heal)return;
+    if(d.heal<=missing&&d.heal>fitHeal){fit=i;fitHeal=d.heal;}
+    if(d.heal<smallHeal){small=i;smallHeal=d.heal;}
+  });
+  return fit>=0?fit:small;
+}
+function foodCount(){return P.inv.reduce((a,s)=>a+((!s.gear&&ITEMS[s.id]&&ITEMS[s.id].heal)?s.qty:0),0);}
 
 /* ---------------- equipment ---------------- */
 function canEquip(piece){
@@ -1212,6 +1261,7 @@ function sfx(kind){
     case'coin':beep(700,.05,'triangle',.04);beep(880,.06,'triangle',.03,.04);break;
     case'die':beep(200,.2,'sawtooth',.06);beep(150,.25,'sawtooth',.05,.15);beep(100,.35,'sawtooth',.05,.3);break;
     case'warp':beep(440,.08,'sine',.05);beep(660,.1,'sine',.05,.07);beep(880,.14,'sine',.04,.15);break;
+    case'spec':beep(300,.06,'square',.06);beep(450,.08,'square',.06,.05);beep(700,.12,'sawtooth',.05,.11);break;
   }
 }
 /* ---- subtle biome ambient pad (very low volume; follows the sound toggle) ---- */
@@ -1690,6 +1740,16 @@ function buildSprites(){
   /* ---- NPCs (detailed animated humanoids) ---- */
   buildNpcSprites();
   /* ---- misc ---- */
+  SPR.gilded_scarab=mkPix(32,32,(g,q)=>{ /* event treasure critter */
+    q(10,27,12,2,'#00000030');
+    q(11,14,10,11,'#c9982c');q(12,15,8,9,'#f0c419');q(11,14,10,1,'#ffe98a');
+    q(15,15,2,9,'#c9982c');                                   /* wing split */
+    q(12,9,8,6,'#c9982c');q(13,10,6,4,'#e8b64c');             /* head */
+    q(13,11,1,1,'#2b2b2b');q(18,11,1,1,'#2b2b2b');
+    q(9,16,2,1,'#8a6a42');q(8,19,3,1,'#8a6a42');q(9,22,2,1,'#8a6a42');
+    q(21,16,2,1,'#8a6a42');q(21,19,3,1,'#8a6a42');q(21,22,2,1,'#8a6a42');
+    q(14,7,1,2,'#8a6a42');q(17,7,1,2,'#8a6a42');              /* antennae */
+    q(13,17,2,2,'#fff0a0');q(17,20,1,1,'#fff0a0');});          /* glint */
   SPR.gravestone=mk(32,32,(g,p)=>{
     p(4,6,8,9,'#7d7a72');p(5,4,6,3,'#7d7a72');p(5,5,6,1,'#8a877f');
     p(6,8,4,1,'#5f5c55');p(6,10,4,1,'#5f5c55');p(3,14,10,1,'#4c4841');});
@@ -1869,6 +1929,10 @@ function buildIcons(){
        speed, combat triangle, ammo), ground loot + gravestone death,
        food & regen, mob/boss AI, main update loop */
 const STEP_MS=170, MOB_STEP=280;
+/* hold-to-steer state (written by input in p8, consumed by update below) */
+const HOLD={down:false,cx:0,cy:0,t0:0,onDrop:false,steer:false};
+/* living-world event scheduler (ambient RNG only — see rollWorldEvent) */
+const EVT={next:0};
 function startStep(e,dur){
   const n=e.path.shift();if(!n)return;
   const[nx,ny]=n;
@@ -2154,6 +2218,65 @@ function eatFood(invIndex){
   updateHUD();
 }
 
+/* ---------------- special attacks (⚡ button) ----------------
+   Guaranteed-hit signature moves resolved by weapon (see SPECIALS in p1).
+   Costs SPEC_COST energy; energy regenerates over time in update(). */
+function specDamage(t,dmg){ /* one packet of special damage, with feedback */
+  t.hp-=dmg;t.aggro=true;
+  floater(t.px+16,t.py-6,'-'+dmg,'#ffd24a',13);
+  spawnParticles(t.px+16,t.py+8,'#ffe98a',8,1.5);
+  gainXp(trainSkill(),dmg*4);
+  if(t.hp<=0)killMob(t);
+}
+function useSpecial(){
+  if((P.spec||0)<SPEC_COST){toast('⚡ Not enough energy','bad');return;}
+  const t=P.action&&P.action.kind==='fight'?findTarget():null;
+  if(!t||!t.alive){toast('Attack a target first, then unleash ⚡');return;}
+  if(distTiles(P.tx,P.ty,t.tx,t.ty)>weaponRange()){toast('Too far away!');return;}
+  if(T-(P.eatT||0)<900)return; /* just ate */
+  const atk=playerAttack(),mode=atk.mode,md=MOBS[t.type];
+  const key=specKeyForWeapon(),sp=SPECIALS[key];
+  const ammo=ammoFor(mode);
+  if(ammo){const need=key==='ranged'?3:1;
+    if(invCount(ammo)<need){toast('Not enough '+ITEMS[ammo].name+'!','bad');return;}
+    removeItem(ammo,need);}
+  P.spec-=SPEC_COST;P.atkT=T;P.specT=T;
+  const tri=triangle(mode,md.style);
+  const base=mult=>Math.max(1,Math.round(atk.maxHit*mult*tri*(rand(88,100)/100)));
+  sfx('spec');shake(4);
+  floater(P.px+16,P.py-20,sp.name+'!','#f0c419',12);
+  const others=fn=>{for(const m of world[P.map].mobs){if(m!==t&&m.alive)fn(m);}};
+  switch(key){
+    case'melee':specDamage(t,base(1.8));break;
+    case'ranged':{for(let i=0;i<3;i++){shoot(P.px+16,P.py+8,t.px+16,t.py+8,'#ffd24a');
+      if(t.alive)specDamage(t,base(0.8));}sfx('shoot');break;}
+    case'magic':{shoot(P.px+16,P.py+8,t.px+16,t.py+8,'#c9a5ff');specDamage(t,base(1.4));
+      const s=base(0.6);others(m=>{if(distTiles(m.tx,m.ty,t.tx,t.ty)<=1)specDamage(m,s);});break;}
+    case'poison':case'burn':case'bleed':{specDamage(t,base(1.3));
+      if(t.alive){const g=EFFECTS[key].g;addDot(t,key,g.dmg*2,g.ticks);}break;}
+    case'cleave':{specDamage(t,base(1.0));
+      others(m=>{if(distTiles(m.tx,m.ty,P.tx,P.ty)<=1)specDamage(m,base(1.0));});break;}
+    case'pierce':{specDamage(t,base(1.0));
+      const dx=Math.sign(t.tx-P.tx),dy=Math.sign(t.ty-P.ty);
+      for(let i=1;i<=4;i++){const m=mobAt(P.map,P.tx+dx*i,P.ty+dy*i);
+        if(m&&m!==t&&m.alive)specDamage(m,base(0.8));}break;}
+    case'knockback':{specDamage(t,base(1.2));if(t.alive)knockbackMob(t,2);
+      others(m=>{if(distTiles(m.tx,m.ty,P.tx,P.ty)<=1){specDamage(m,base(0.8));if(m.alive)knockbackMob(m,2);}});break;}
+    case'reach':{specDamage(t,base(1.4));
+      others(m=>{if(distTiles(m.tx,m.ty,t.tx,t.ty)<=1&&distTiles(m.tx,m.ty,P.tx,P.ty)<=weaponRange())specDamage(m,base(0.9));});break;}
+    case'crush':specDamage(t,base(1.6));break;
+    case'execute':specDamage(t,base(t.hp/md.hp<=0.5?2.2:1.4));break;
+    case'lifesteal':{const d0=base(1.5);specDamage(t,d0);
+      const heal=Math.min(maxHp()-P.hp,d0);
+      if(heal>0){P.hp+=heal;floater(P.px+8,P.py-28,'+'+heal,'#c98bff',10);}break;}
+    case'slashwave':{specDamage(t,base(1.2));const wave=base(1.0);
+      shoot(P.px+16,P.py+8,P.px+16+P.facing*120,P.py+8,'#f0c419');
+      for(let i=1;i<=4;i++){const m=mobAt(P.map,P.tx+P.facing*i,P.ty);
+        if(m&&m!==t&&m.alive)specDamage(m,wave);}break;}
+  }
+  updateHUD();
+}
+
 /* ---------------- the action tick ---------------- */
 function doAction(){
   if(!P.action)return;
@@ -2217,7 +2340,7 @@ function doAction(){
   }
   if(P.action.kind==='fight'){
     t.aggro=true;
-    if(T-(P.eatT||0)<1200)return; /* just ate */
+    if(T-(P.eatT||0)<900)return; /* just ate (snappier than the old 1.2 s) */
     if(T-(P.atkT||0)>=weaponSpeed()){
       const atk=playerAttack();
       const mode=atk.mode;
@@ -2336,7 +2459,13 @@ function killMob(m){
   m.alive=false;m.aggro=false;m.dots=[];m.respawnAt=T+(d.respawn||9000);
   gainXp(trainSkill(),d.xp);
   const loot=rollLoot(m);loot.src=m.type; /* tag for the bestiary */
+  if(m.elite){ /* elites: double XP + two bonus loot rolls */
+    gainXp(trainSkill(),d.xp);
+    for(let i=0;i<2;i++){const ex=rollLoot(m);loot.gold+=ex.gold;loot.items.push(...ex.items);}
+    floater(m.px+16,m.py-14,'ALPHA SLAIN','#f0c419',12);
+  }
   spawnDrop(P.map,m.tx,m.ty,loot);
+  if(d.flee){sfx('rare');spawnParticles(m.px+16,m.py+8,'#ffd700',26,2.2);toast('✨ Caught it! The scarab bursts with treasure!','gold');}
   sfx('kill');
   spawnParticles(m.px+16,m.py+10,d.boss?'#ffcf5a':'#e8b070',d.boss?22:12,d.boss?2.2:1.4);
   P.stats.kills++;
@@ -2389,13 +2518,31 @@ function updateMobs(){
   for(const m of W.mobs){
     const d=MOBS[m.type];
     if(!m.alive){
-      if(T>=m.respawnAt){m.alive=true;m.hp=d.hp;m.dots=[];m.tx=m.hx;m.ty=m.hy;m.px=m.tx*TILE;m.py=m.ty*TILE;m.moving=null;}
+      if(!m.temp&&T>=m.respawnAt){m.alive=true;m.hp=d.hp;m.dots=[];m.tx=m.hx;m.ty=m.hy;m.px=m.tx*TILE;m.py=m.ty*TILE;m.moving=null;
+        /* rare ELITE respawn: tougher, meaner, triple loot (ambient RNG so the
+           gameplay/loot stream — and the smoke tests — stay undisturbed) */
+        m.elite=(!d.boss&&!d.semi&&!d.flee&&ambChance(0.04));
+        if(m.elite)m.hp=Math.round(d.hp*1.6);
+      }
       continue;
     }
     tickDots(m);
     if(!m.alive)continue; /* a DoT tick may have killed it */
     stepEntity(m);
     if(m.moving)continue;
+    if(d.flee){ /* treasure critter: skitters away, escapes if not caught */
+      if(m.expireAt&&T>m.expireAt){m.alive=false;toast('✨ The scarab burrowed away…');continue;}
+      if(distTiles(m.tx,m.ty,P.tx,P.ty)<=6){
+        const dx=Math.sign(m.tx-P.tx),dy=Math.sign(m.ty-P.ty);
+        for(const[a,b]of[[dx,dy],[dx,0],[0,dy],[dx,-dy],[-dx,dy]]){
+          if(!a&&!b)continue;
+          const nx=m.tx+a,ny=m.ty+b;
+          if(walkable(P.map,nx,ny)&&!mobAt(P.map,nx,ny)&&!(nx===P.tx&&ny===P.ty)){
+            m.path=[[nx,ny]];startStep(m,190);break;}
+        }
+      }
+      continue;
+    }
     if(d.aggro&&!m.aggro&&distTiles(m.tx,m.ty,P.tx,P.ty)<=4)m.aggro=true;
     if(m.aggro){
       const dist=distTiles(m.tx,m.ty,P.tx,P.ty);
@@ -2408,6 +2555,7 @@ function updateMobs(){
           const chance=hitChance(d.acc*2+8,playerDefence()*(tri>1?0.95:1));
           let dmg=0;
           if(Math.random()<chance)dmg=Math.max(1,Math.round(rand(1,Math.max(1,Math.floor(1+d.pow*0.40)))*tri));
+          if(m.elite)dmg=Math.round(dmg*1.3);
           if(d.style==='ranged')shoot(m.px+16,m.py+8,P.px+16,P.py+8,'#d8d5c8');
           if(d.style==='magic')shoot(m.px+16,m.py+8,P.px+16,P.py+8,'#b06fd1');
           m.lungeT=T; /* renderer lunges the mob toward the player briefly */
@@ -2430,7 +2578,66 @@ function updateMobs(){
       }
     }
   }
-  for(const r of W.res)if(!r.alive&&T>=r.respawnAt){r.alive=true;r.charges=RES[r.type].hp||1;}
+  /* temp (event) mobs vanish once dead — they never respawn */
+  for(let i=W.mobs.length-1;i>=0;i--)if(W.mobs[i].temp&&!W.mobs[i].alive)W.mobs.splice(i,1);
+  for(let i=W.res.length-1;i>=0;i--){const r=W.res[i];
+    if(r.temp){ /* event nodes: remove when depleted or timed out */
+      if(!r.alive||T>r.expireAt){W.grid[r.y][r.x]=MAPS[P.map].ground;W.res.splice(i,1);}
+    }else if(!r.alive&&T>=r.respawnAt){r.alive=true;r.charges=RES[r.type].hp||1;}
+  }
+}
+
+/* ---------------- living-world events (ambient RNG only) ----------------
+   Every few minutes in the wilds, something happens: a meteor with rich ore,
+   an ambush, or a treasure scarab. Temp mobs/nodes are runtime-only. */
+function evtSpot(W,minD,maxD){
+  for(let tries=0;tries<60;tries++){
+    const x=1+ambRand(0,W.w-3),y=1+ambRand(0,W.h-3);
+    const dd=distTiles(x,y,P.tx,P.ty);
+    if(dd>=minD&&dd<=maxD&&walkable(P.map,x,y)&&!mobAt(P.map,x,y)&&!resAt(P.map,x,y)&&!dropAt(P.map,x,y))return[x,y];
+  }
+  return null;
+}
+const METEOR_NODE={forest:'I',mountains:'Z',plains:'e',desert:'u'}; /* region-appropriate ore */
+function evtMeteor(W){
+  const spot=evtSpot(W,8,26);if(!spot)return;
+  const[x,y]=spot,type=METEOR_NODE[P.map]||'Z';
+  let placed=0;
+  for(const[cx,cy]of[[x,y],[x+1,y],[x,y+1],[x-1,y],[x,y-1]]){
+    if(placed>=3)break;
+    if(!walkable(P.map,cx,cy)||resAt(P.map,cx,cy)||mobAt(P.map,cx,cy))continue;
+    W.grid[cy][cx]=type;
+    W.res.push({id:'evt:'+cx+':'+cy,type,x:cx,y:cy,alive:true,respawnAt:0,
+      charges:4,temp:true,expireAt:T+180000});
+    placed++;
+  }
+  if(placed){toast('☄️ A meteor crashed nearby — rich '+RES[type].name+'s for 3 minutes!','gold');sfx('rare');shake(5);}
+}
+function evtAmbush(W){
+  const pool=[...new Set(W.mobs.filter(m=>{const d=MOBS[m.type];return d&&!d.boss&&!d.semi&&!d.flee;}).map(m=>m.type))];
+  if(!pool.length)return;
+  const n=ambRand(2,3);let spawned=0;
+  for(let tries=0;tries<40&&spawned<n;tries++){
+    const ang=ambRand(0,359)*Math.PI/180,dd=ambRand(4,6);
+    const x=P.tx+Math.round(Math.cos(ang)*dd),y=P.ty+Math.round(Math.sin(ang)*dd);
+    if(!walkable(P.map,x,y)||mobAt(P.map,x,y))continue;
+    const t=pool[ambRand(0,pool.length-1)],d=MOBS[t];
+    W.mobs.push({id:P.map+':evt'+(T|0)+':'+spawned,type:t,hx:x,hy:y,tx:x,ty:y,px:x*TILE,py:y*TILE,
+      hp:d.hp,alive:true,respawnAt:0,moving:null,aggro:true,atkT:T+600,wanderT:0,temp:true});
+    spawned++;
+  }
+  if(spawned){toast('⚔️ Ambush! '+spawned+' foes leap from hiding!','bad');sfx('hurt');shake(6);}
+}
+function evtScarab(W){
+  const spot=evtSpot(W,5,10);if(!spot)return;
+  const[x,y]=spot;
+  W.mobs.push({id:P.map+':scarab'+(T|0),type:'gilded_scarab',hx:x,hy:y,tx:x,ty:y,px:x*TILE,py:y*TILE,
+    hp:1,alive:true,respawnAt:0,moving:null,aggro:false,atkT:0,wanderT:0,temp:true,expireAt:T+45000});
+  toast('✨ A Gilded Scarab scuttles nearby — catch it before it burrows!','gold');sfx('coin');
+}
+function rollWorldEvent(){
+  const W=world[P.map],r=ambRand(1,100);
+  if(r<=40)evtMeteor(W);else if(r<=75)evtAmbush(W);else evtScarab(W);
 }
 /* townsfolk gently mill about near their post (gives them a walk cycle) */
 function updateNpcs(){
@@ -2457,11 +2664,36 @@ let FRAME_DT=16;
 function update(dt){
   FRAME_DT=dt;T+=dt;
   P.stats.playMs+=dt;
+  P.spec=Math.min(SPEC_MAX,(P.spec==null?SPEC_MAX:P.spec)+dt*SPEC_REGEN);
   stepEntity(P);
+  /* hold-to-steer: press & hold walks continuously toward the pointer */
+  if(HOLD.down&&!HOLD.onDrop&&T-HOLD.t0>220){
+    if(!HOLD.steer){HOLD.steer=true;P.action=null;P.path=[];}
+    if(!P.moving){
+      const rect=cv.getBoundingClientRect(),cam=camera();
+      const wx=(HOLD.cx-rect.left)/SCALE+cam.camx,wy=(HOLD.cy-rect.top)/SCALE+cam.camy;
+      const ttx=Math.floor(wx/TILE),tty=Math.floor(wy/TILE);
+      if(ttx!==P.tx||tty!==P.ty){
+        const dx=Math.sign(ttx-P.tx),dy=Math.sign(tty-P.ty);
+        const ok=(x,y)=>walkable(P.map,x,y);
+        let nx=P.tx,ny=P.ty;
+        /* diagonal only when both cardinals are open (no corner-cutting) */
+        if(dx&&dy&&ok(P.tx+dx,P.ty+dy)&&ok(P.tx+dx,P.ty)&&ok(P.tx,P.ty+dy)){nx+=dx;ny+=dy;}
+        else if(dx&&ok(P.tx+dx,P.ty))nx+=dx;
+        else if(dy&&ok(P.tx,P.ty+dy))ny+=dy;
+        if(nx!==P.tx||ny!==P.ty)P.path=[[nx,ny]];
+      }
+    }
+  }
   if(!P.moving){
     const ex=exitAt(P.map,P.tx,P.ty);
     if(ex){switchMap(ex);return;}
     doAction(); /* before the next step: lets ranged/magic stop at range */
+  }
+  /* living-world events: every few minutes in the wilds, something happens */
+  if(REGION_ORDER.includes(P.map)){
+    if(!EVT.next)EVT.next=T+ambRand(90000,180000);
+    if(T>=EVT.next){EVT.next=T+ambRand(150000,300000);rollWorldEvent();}
   }
   if(!P.moving&&P.path.length){
     const[nx,ny]=P.path[0];
@@ -2625,15 +2857,22 @@ function draw(){
         ctx.font='bold 8px monospace';ctx.textAlign='center';
         ctx.fillStyle='#f0c419';ctx.fillText(d.name,m.px+16,m.py-44);
       }else{
+        if(m.elite||d.flee){ /* gold aura: alpha elites + the treasure scarab */
+          const pulse=0.28+0.14*Math.sin(T/240);
+          ctx.globalAlpha=pulse;ctx.strokeStyle='#f0c419';ctx.lineWidth=2;
+          ctx.beginPath();ctx.arc(m.px+16,m.py+16,15,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;
+        }
         drawFlipped(SPR[m.type],mx,my,facing);
-        if(d.semi){ /* elite: name bar + wider health bar */
+        const mh=m.elite?Math.round(d.hp*1.6):d.hp;
+        if(d.semi||m.elite){ /* semi-boss or alpha elite: name bar + wide health bar */
           ctx.fillStyle='#000000aa';ctx.fillRect(m.px+2,m.py-8,28,4);
-          ctx.fillStyle='#c9584a';ctx.fillRect(m.px+3,m.py-7,26*(m.hp/d.hp),2);
+          ctx.fillStyle='#c9584a';ctx.fillRect(m.px+3,m.py-7,26*(m.hp/mh),2);
           ctx.font='bold 8px monospace';ctx.textAlign='center';
-          ctx.fillStyle='#d9a5f0';ctx.fillText(d.name,m.px+16,m.py-11);
-        }else if(m.hp<d.hp){
+          ctx.fillStyle=m.elite?'#f0c419':'#d9a5f0';
+          ctx.fillText((m.elite?'Alpha ':'')+d.name,m.px+16,m.py-11);
+        }else if(m.hp<mh){
           ctx.fillStyle='#000000aa';ctx.fillRect(m.px+6,m.py-6,20,4);
-          ctx.fillStyle='#c9584a';ctx.fillRect(m.px+7,m.py-5,18*(m.hp/d.hp),2);
+          ctx.fillStyle='#c9584a';ctx.fillRect(m.px+7,m.py-5,18*(m.hp/mh),2);
         }
       }
     }else if(it.k==='n'){
@@ -2733,8 +2972,37 @@ function draw(){
     ctx.fillStyle=f.color;ctx.fillText(f.txt,f.x,f.y-pr*18);
     ctx.globalAlpha=1;
   }
+  drawWeather(camx,camy);
   ctx.restore();
   if(minimapOn)drawMinimap();
+}
+/* ---------------- ambient biome weather (cosmetic, ambient RNG only) ------
+   Drifting leaves / snow / pollen / sand wisps over the four wild regions —
+   ~2 dozen 1.6px motes wrapped to the viewport; pure atmosphere, zero gameplay. */
+const WEATHER={
+  forest:   {c:['#7fb069','#5d7a33','#c9a24a'],vy:[8,18], vx:[-6,6],  n:26,sway:1},
+  mountains:{c:['#ffffff','#dbe4ee'],          vy:[10,22],vx:[-4,4],  n:34,sway:1},
+  plains:   {c:['#e6cf49','#c8b95e'],          vy:[-2,2], vx:[10,26], n:18,sway:0},
+  desert:   {c:['#e6d6a0','#cbb677'],          vy:[-3,3], vx:[18,40], n:22,sway:0},
+};
+let wparts=[],wmap='';
+function drawWeather(camx,camy){
+  const cfg=WEATHER[P.map];
+  if(!cfg){if(wparts.length){wparts=[];wmap='';}return;}
+  const vw=VW/SCALE,vh=VH/SCALE;
+  if(wmap!==P.map){wmap=P.map;wparts=[];
+    for(let i=0;i<cfg.n;i++)wparts.push({
+      x:camx+ambRand(0,vw|0),y:camy+ambRand(0,vh|0),
+      vx:ambRand(cfg.vx[0],cfg.vx[1]),vy:ambRand(cfg.vy[0],cfg.vy[1]),
+      c:cfg.c[i%cfg.c.length],ph:ambRand(0,628)/100});}
+  for(const p of wparts){
+    p.x+=p.vx*FRAME_DT/1000;p.y+=p.vy*FRAME_DT/1000;
+    const sx=p.x+(cfg.sway?Math.sin(T/700+p.ph)*3:0),sy=p.y;
+    if(sx<camx-8)p.x+=vw+16; if(sx>camx+vw+8)p.x-=vw+16;
+    if(sy<camy-8)p.y+=vh+16; if(sy>camy+vh+8)p.y-=vh+16;
+    ctx.globalAlpha=0.5;ctx.fillStyle=p.c;ctx.fillRect(sx,sy,1.6,1.6);
+  }
+  ctx.globalAlpha=1;
 }
 function drawFlipped(spr,x,y,facing){
   if(facing<0){ctx.save();ctx.translate(x+32,y);ctx.scale(-1,1);ctx.drawImage(spr,0,0);ctx.restore();}
@@ -2770,7 +3038,19 @@ function updateHUD(){
     if(am){if(a){am.style.display='';am.textContent=(a==='arrows'?'➶ ':'✦ ')+ammo;}
       else am.style.display='none';}
   }
-  _hud={hp:P.hp,mh,gold:P.gold,mode,style:P.style,a,ammo};
+  /* ⚡ special energy (fill from the bottom; glows when an use is banked) */
+  const spec=Math.round(P.spec==null?SPEC_MAX:P.spec);
+  if(spec!==_hud.spec){
+    const bs=$('bSpec');
+    if(bs){$('specfill').style.height=spec+'%';bs.classList.toggle('ready',spec>=SPEC_COST);}
+  }
+  /* 🍖 quick-eat (hidden when the bag holds no food) */
+  const food=foodCount();
+  if(food!==_hud.food){
+    const bf=$('bFood');
+    if(bf){bf.style.display=food>0?'':'none';$('foodqty').textContent=food;}
+  }
+  _hud={hp:P.hp,mh,gold:P.gold,mode,style:P.style,a,ammo,spec,food};
 }
 
 /* ---------------- minimap (toggle open, redrawn while visible) ---------- */
@@ -2802,7 +3082,8 @@ function drawMinimap(){
   for(const e of W.exits){g.fillStyle='#7fbf5f';g.fillRect(e.x*cell-1,e.y*cell-1,cell+2,cell+2);}
   for(const n of W.npcs){g.fillStyle='#e8b64c';g.fillRect(n.x*cell-1,n.y*cell-1,cell+2,cell+2);}
   for(const m of W.mobs){if(!m.alive)continue;
-    g.fillStyle=MOBS[m.type].boss?'#f0c419':'#c9584a';g.fillRect(m.tx*cell,m.ty*cell,cell,cell);}
+    g.fillStyle=(MOBS[m.type].boss||MOBS[m.type].flee)?'#f0c419':m.elite?'#ff8a3a':'#c9584a';
+    g.fillRect(m.tx*cell,m.ty*cell,cell,cell);}
   g.fillStyle='#0d0b08';g.fillRect(P.tx*cell-2,P.ty*cell-2,cell+4,cell+4);
   g.fillStyle='#66e0ff';g.fillRect(P.tx*cell-1,P.ty*cell-1,cell+2,cell+2);
   $('mmlabel').textContent=MAPS[P.map].name;
@@ -2889,6 +3170,8 @@ function openEquipment(){
     for(const e of weaponEffects(wpn))
       h+='<div class="qrow"><span style="color:'+EFFECTS[e.k].color+'">✦ '+esc(effDesc(e.k,e.greater))+'</span><span class="hint">'+esc(EFFECTS[e.k].desc)+'</span></div>';
   }
+  {const sp=SPECIALS[specKeyForWeapon()];
+   h+='<div class="qrow"><span style="color:var(--gold)">⚡ '+esc(sp.name)+'</span><span class="hint">'+esc(sp.desc)+'</span></div>';}
   if(combatMode()==='melee'){
     h+='<div class="sect">Melee style — trains the chosen skill</div><div class="stylerow">';
     for(const[st,label,sk]of[['accurate','🎯 Accurate','attack'],['aggressive','⚔️ Aggressive','strength'],['defensive','🛡️ Defensive','defence']])
@@ -3477,6 +3760,9 @@ $('bMap').addEventListener('click',()=>{ensureAudio();toggleMinimap();});
 $('minimap').addEventListener('click',()=>{minimapOn=false;$('minimap').classList.remove('open');});
 $('bGear').addEventListener('click',()=>{ensureAudio();openSettings();});
 {const bt=$('bTravel');if(bt)bt.addEventListener('click',()=>{ensureAudio();openTravel();});}
+{const bs=$('bSpec');if(bs)bs.addEventListener('click',()=>{ensureAudio();useSpecial();});}
+{const bf=$('bFood');if(bf)bf.addEventListener('click',()=>{ensureAudio();
+  const i=bestFoodIndex();if(i<0)toast('No food in your bag','bad');else eatFood(i);});}
 const sb=$('stylebtn');
 if(sb)sb.addEventListener('click',()=>{
   const order=['accurate','aggressive','defensive'];
@@ -3574,14 +3860,20 @@ function bindInput(){
     press={sx:ev.clientX,sy:ev.clientY,tx,ty,wx,wy,timer:0};
     const drop=dropAt(P.map,tx,ty); /* long-tap a pile → itemised pickup menu */
     if(drop)press.timer=setTimeout(()=>{press=null;openFloorMenu(drop);},450);
+    /* hold-to-steer: update() (p5) starts steering after ~220 ms held */
+    HOLD.down=true;HOLD.cx=ev.clientX;HOLD.cy=ev.clientY;HOLD.t0=T;HOLD.onDrop=!!drop;HOLD.steer=false;
   });
   cv.addEventListener('pointermove',ev=>{
+    if(HOLD.down){HOLD.cx=ev.clientX;HOLD.cy=ev.clientY;}
     if(press&&(Math.abs(ev.clientX-press.sx)>12||Math.abs(ev.clientY-press.sy)>12))endPress();
   });
   cv.addEventListener('pointerup',()=>{
-    if(!press)return;const p=press;endPress();tapAt(p.tx,p.ty,p.wx,p.wy);
+    const steered=HOLD.steer;HOLD.down=false;HOLD.steer=false;
+    if(!press)return;const p=press;endPress();
+    if(steered)return; /* the hold consumed this gesture — no tap on release */
+    tapAt(p.tx,p.ty,p.wx,p.wy);
   });
-  cv.addEventListener('pointercancel',endPress);
+  cv.addEventListener('pointercancel',()=>{HOLD.down=false;HOLD.steer=false;endPress();});
   window.addEventListener('resize',resize);
 }
 
